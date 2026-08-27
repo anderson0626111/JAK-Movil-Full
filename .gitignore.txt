@@ -1,0 +1,35 @@
+# Node.js
+node_modules/
+.env
+.env.local
+
+# Base de datos (XAMPP - subimos solo estructura, no datos)
+*.sqlite
+*.sqlite3
+*.db
+*.myd
+*.myi
+
+# Archivos de fotos/imágenes subidas por usuarios (solo estructura)
+backend-jakmovil/uploads/
+backend-jakmovil/public/images/
+*.jpg
+*.png
+*.jpeg
+*.gif
+*.mp4
+*.webp
+
+# Logs y archivos temporales
+*.log
+.DS_Store
+Thumbs.db
+dist/
+build/
+.vscode/
+*.tmp
+
+# Archivos comprimidos
+*.zip
+*.rar
+*.7z
