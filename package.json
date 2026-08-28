@@ -1,0 +1,12 @@
+{
+  "name": "jak-movil-full",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Frontend y backend de JAK Móvil",
+  "scripts": {
+    "web": "node scripts/start-web.js",
+    "frontend": "npm run web --prefix JAK-Movil-App",
+    "backend": "npm run dev --prefix backend-jakmovil",
+    "setup": "npm install --prefix backend-jakmovil && npm install --prefix JAK-Movil-App"
+  }
+}

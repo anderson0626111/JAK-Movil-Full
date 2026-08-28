@@ -1,0 +1,19 @@
+{
+  "folders": [
+    {
+      "name": "JAK Móvil Full",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/.expo": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/.expo": true
+    },
+    "terminal.integrated.cwd": "${workspaceFolder}"
+  }
+}
