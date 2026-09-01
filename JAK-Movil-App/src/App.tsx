@@ -6,7 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavBar } from './components/navigation/NavBar';
 import { FilterPanel, SearchFilters } from './components/search/FilterPanel';
 import { vehicles } from './data/vehicleData';
@@ -23,7 +23,7 @@ interface ApiVehicle {
   id: number;
   marca: string;
   modelo: string;
-  año: number;
+  anio: number;
   precio: number;
   moneda: string;
   tipo: string;
@@ -47,7 +47,7 @@ function mapApiVehicle(vehicle: ApiVehicle): Vehicle {
     id: String(vehicle.id),
     title: `${vehicle.marca} ${vehicle.modelo}`,
     price: formatPrice(vehicle.precio, vehicle.moneda),
-    year: vehicle.año,
+    year: vehicle.anio,
     mileage: vehicle.tipo,
     transmission: vehicle.transmision,
     fuel: vehicle.combustible,
@@ -57,15 +57,37 @@ function mapApiVehicle(vehicle: ApiVehicle): Vehicle {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<
-    'home' | 'about' | 'contact' | 'results' | 'details'
+    'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used'
   >('home');
 
-  const [catalogVehicles, setCatalogVehicles] = useState<Vehicle[]>(vehicles);
+  const [catalogVehicles, setCatalogVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
     null
   );
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
+
+  // Cargar todos los vehículos al inicializar
+  useEffect(() => {
+    async function loadAllVehicles() {
+      try {
+        const response = await fetch(`${API_URL}/api/vehiculos`);
+        if (response.ok) {
+          const data: ApiVehicle[] = await response.json();
+          const results = data.map(mapApiVehicle).slice(0, 6);
+          setCatalogVehicles(results);
+          setSearchMessage(
+            results.length === 1
+              ? 'Mostrando 1 vehículo disponible'
+              : `Mostrando ${results.length} vehículos disponibles`
+          );
+        }
+      } catch (error) {
+        console.error('Error cargando vehículos:', error);
+      }
+    }
+    loadAllVehicles();
+  }, []);
 
   async function handleSearch(filters: SearchFilters) {
     try {
@@ -120,8 +142,46 @@ export default function App() {
     setCurrentPage('results');
   }
 
+  async function loadNewVehicles() {
+    try {
+      const response = await fetch(`${API_URL}/api/vehiculos?condicion=Nuevo`);
+      if (response.ok) {
+        const data: ApiVehicle[] = await response.json();
+        const results = data.map(mapApiVehicle);
+        setCatalogVehicles(results);
+        setCurrentPage('new');
+        setSearchMessage(
+          results.length === 1
+            ? 'Mostrando 1 vehículo nuevo'
+            : `Mostrando ${results.length} vehículos nuevos`
+        );
+      }
+    } catch (error) {
+      console.error('Error cargando vehículos nuevos:', error);
+    }
+  }
+
+  async function loadUsedVehicles() {
+    try {
+      const response = await fetch(`${API_URL}/api/vehiculos?condicion=Usado`);
+      if (response.ok) {
+        const data: ApiVehicle[] = await response.json();
+        const results = data.map(mapApiVehicle);
+        setCatalogVehicles(results);
+        setCurrentPage('used');
+        setSearchMessage(
+          results.length === 1
+            ? 'Mostrando 1 vehículo usado'
+            : `Mostrando ${results.length} vehículos usados`
+        );
+      }
+    } catch (error) {
+      console.error('Error cargando vehículos usados:', error);
+    }
+  }
+
   const activeNavigationPage =
-    currentPage === 'details' || currentPage === 'results' ? 'home' : currentPage;
+    currentPage === 'details' || currentPage === 'results' || currentPage === 'new' || currentPage === 'used' ? 'home' : currentPage;
 
   return (
     <ScrollView style={styles.container}>
@@ -130,6 +190,8 @@ export default function App() {
       <NavBar
         activePage={activeNavigationPage}
         onHomePress={() => setCurrentPage('home')}
+        onNewVehiclesPress={loadNewVehicles}
+        onUsedVehiclesPress={loadUsedVehicles}
         onAboutPress={() => setCurrentPage('about')}
         onContactPress={() => setCurrentPage('contact')}
       />
@@ -139,9 +201,9 @@ export default function App() {
           vehicleId={selectedVehicleId}
           onBack={returnToCatalog}
         />
-      ) : currentPage === 'results' ? (
+      ) : currentPage === 'results' || currentPage === 'new' || currentPage === 'used' ? (
         <View style={styles.content}>
-          <Text style={styles.title}>Resultados de búsqueda</Text>
+          <Text style={styles.title}>{currentPage === 'new' ? 'Vehículos Nuevos' : currentPage === 'used' ? 'Vehículos Usados' : 'Resultados de búsqueda'}</Text>
           {isSearching ? (
             <View style={styles.statusContainer}>
               <ActivityIndicator size="large" color="#dc2626" />
@@ -210,6 +272,8 @@ export default function App() {
 
       <Footer
         onHomePress={() => setCurrentPage('home')}
+        onNewVehiclesPress={loadNewVehicles}
+        onUsedVehiclesPress={loadUsedVehicles}
         onContactPress={() => setCurrentPage('contact')}
         onCatalogPress={() => setCurrentPage('home')}
         onAboutPress={() => setCurrentPage('about')}
@@ -241,7 +305,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#111827',
     marginTop: 20,
-    marginBottom: 12,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   resultsText: {
     width: '100%',
@@ -249,6 +314,7 @@ const styles = StyleSheet.create({
     color: '#4b5563',
     fontSize: 15,
     marginBottom: 18,
+    textAlign: 'center',
   },
   catalogContainer: {
     flexDirection: 'row',

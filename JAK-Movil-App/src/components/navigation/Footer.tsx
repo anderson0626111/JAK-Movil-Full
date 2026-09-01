@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native'
 
 interface FooterProps {
   onHomePress?: () => void;
+  onNewVehiclesPress?: () => void;
+  onUsedVehiclesPress?: () => void;
   onContactPress?: () => void;
   onCatalogPress?: () => void;
   onAboutPress?: () => void;
@@ -10,6 +12,8 @@ interface FooterProps {
 
 export function Footer({
   onHomePress,
+  onNewVehiclesPress,
+  onUsedVehiclesPress,
   onContactPress,
   onCatalogPress,
   onAboutPress,

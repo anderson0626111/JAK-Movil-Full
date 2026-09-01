@@ -121,7 +121,7 @@ app.get('/api/vehiculos/filtros', async (req, res) => {
 // Búsqueda de vehículos.
 app.get('/api/vehiculos', async (req, res) => {
   try {
-    const { marca, modelo, anioDesde, anioHasta } = req.query;
+    const { marca, modelo, anioDesde, anioHasta, condicion } = req.query;
 
     const desde = validarAnio(anioDesde);
     const hasta = validarAnio(anioHasta);
@@ -150,16 +150,26 @@ app.get('/api/vehiculos', async (req, res) => {
     }
 
     if (desde) {
-      sql += ' AND `año` >= ?';
+      sql += ' AND anio >= ?';
       parametros.push(desde);
     }
 
     if (hasta) {
-      sql += ' AND `año` <= ?';
+      sql += ' AND anio <= ?';
       parametros.push(hasta);
     }
 
-    sql += ' ORDER BY `año` DESC, marca ASC, modelo ASC';
+    if (condicion) {
+      if (condicion === 'Nuevo') {
+        sql += ' AND condicion = ?';
+        parametros.push(condicion);
+      } else if (condicion === 'Usado') {
+        sql += ' AND condicion LIKE ?';
+        parametros.push('Usado%');
+      }
+    }
+
+    sql += ' ORDER BY anio DESC, marca ASC, modelo ASC';
 
     const [vehiculos] = await db.query(sql, parametros);
 

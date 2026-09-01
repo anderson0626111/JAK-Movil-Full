@@ -4,7 +4,7 @@ import { View, Text, Image, StyleSheet, TouchableOpacity, ActivityIndicator } fr
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface ApiVehicle {
-  id: number; marca: string; modelo: string; año: number; precio: number; moneda: string;
+  id: number; marca: string; modelo: string; anio: number; precio: number; moneda: string;
   tipo: string; condicion: string | null; transmision: string; combustible: string;
   imagen: string | null; fotos: string[]; color_exterior: string | null;
   color_interior: string | null; kilometraje: string | null; cilindraje: string | null;
@@ -68,7 +68,7 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
     <View style={styles.container}>
       <TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>← VOLVER A RESULTADOS</Text></TouchableOpacity>
       <View style={styles.headingRow}>
-        <View><Text style={styles.title}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{vehicle.año} · {vehicle.condicion || vehicle.tipo}</Text></View>
+        <View><Text style={styles.title}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{vehicle.anio} · {vehicle.condicion || vehicle.tipo}</Text></View>
         <Text style={styles.price}>{formatPrice(vehicle.precio, vehicle.moneda)}</Text>
       </View>
 
@@ -86,7 +86,7 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
       <View style={styles.detailsCard}>
         <Text style={styles.sectionTitle}>Información del vehículo</Text>
         <View style={styles.infoGrid}>
-          <InfoRow label="Marca" value={vehicle.marca} /><InfoRow label="Modelo" value={vehicle.modelo} /><InfoRow label="Año" value={vehicle.año} />
+          <InfoRow label="Marca" value={vehicle.marca} /><InfoRow label="Modelo" value={vehicle.modelo} /><InfoRow label="Año" value={vehicle.anio} />
           <InfoRow label="Tipo" value={vehicle.tipo} /><InfoRow label="Condición" value={vehicle.condicion} /><InfoRow label="Transmisión" value={vehicle.transmision} />
           <InfoRow label="Combustible" value={vehicle.combustible} /><InfoRow label="Color exterior" value={vehicle.color_exterior} /><InfoRow label="Color interior" value={vehicle.color_interior} />
           <InfoRow label="Kilometraje" value={vehicle.kilometraje} /><InfoRow label="Cilindraje" value={vehicle.cilindraje} /><InfoRow label="Tracción" value={vehicle.traccion} />

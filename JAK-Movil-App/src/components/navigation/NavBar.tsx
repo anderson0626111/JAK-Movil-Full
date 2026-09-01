@@ -3,13 +3,17 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 
 interface NavBarProps {
   onHomePress?: () => void;
+  onNewVehiclesPress?: () => void;
+  onUsedVehiclesPress?: () => void;
   onAboutPress?: () => void;
   onContactPress?: () => void;
-  activePage?: 'home' | 'about' | 'contact' | string;
+  activePage?: 'home' | 'about' | 'contact' | 'new' | 'used' | string;
 }
 
 export function NavBar({
   onHomePress,
+  onNewVehiclesPress,
+  onUsedVehiclesPress,
   onAboutPress,
   onContactPress,
   activePage = 'home',
@@ -38,11 +42,11 @@ export function NavBar({
             <Text style={styles.navText}>INICIO</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navItem} onPress={onHomePress}>
+          <TouchableOpacity style={styles.navItem} onPress={onNewVehiclesPress}>
             <Text style={styles.navText}>VEHÍCULOS NUEVOS</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navItem} onPress={onHomePress}>
+          <TouchableOpacity style={styles.navItem} onPress={onUsedVehiclesPress}>
             <Text style={styles.navText}>VEHÍCULOS USADOS</Text>
           </TouchableOpacity>
 
