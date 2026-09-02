@@ -236,7 +236,7 @@ export default function App() {
             </View>
           </View>
 
-          <HeroImage />
+          <HeroImage onVehiclePress={openVehicleDetails} />
 
           <View style={styles.content}>
             <Text style={styles.title}>Catálogo de Vehículos Disponibles</Text>

@@ -74,7 +74,13 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
 
       <View style={styles.galleryCard}>
         <View style={styles.mainImageContainer}>
-          {selectedPhoto ? <Image source={{ uri: selectedPhoto }} style={styles.mainImage} resizeMode="cover" /> : <View style={styles.imageFallback}><Text style={styles.fallbackText}>No hay fotografías disponibles</Text></View>}
+          {selectedPhoto ? (
+            <>
+              <Image source={{ uri: selectedPhoto }} style={styles.imageBackdrop} resizeMode="cover" blurRadius={18} />
+              <View style={styles.imageBackdropOverlay} />
+              <Image source={{ uri: selectedPhoto }} style={styles.mainImage} resizeMode="contain" />
+            </>
+          ) : <View style={styles.imageFallback}><Text style={styles.fallbackText}>No hay fotografías disponibles</Text></View>}
         </View>
         {vehicle.fotos.length > 1 && <View style={styles.thumbnailRow}>{vehicle.fotos.map((photo, index) => (
           <TouchableOpacity key={photo} activeOpacity={0.8} onPress={() => setSelectedPhoto(photo)} style={[styles.thumbnailButton, selectedPhoto === photo && styles.thumbnailSelected]}>
@@ -111,7 +117,9 @@ const styles = StyleSheet.create({
   title: { color: '#111827', fontSize: 28, fontWeight: 'bold' }, subtitle: { color: '#6b7280', fontSize: 15, marginTop: 5 },
   price: { color: '#dc2626', fontSize: 24, fontWeight: 'bold' },
   galleryCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 22, elevation: 2 },
-  mainImageContainer: { width: '100%', maxWidth: 720, height: 320, borderRadius: 10, overflow: 'hidden', backgroundColor: '#e5e7eb' },
+  mainImageContainer: { width: '100%', maxWidth: 720, height: 320, borderRadius: 10, overflow: 'hidden', backgroundColor: '#f3f4f6' },
+  imageBackdrop: { position: 'absolute', width: '100%', height: '100%', opacity: 0.45 },
+  imageBackdropOverlay: { position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,0.35)' },
   mainImage: { width: '100%', height: '100%' }, imageFallback: { flex: 1, justifyContent: 'center', alignItems: 'center' }, fallbackText: { color: '#6b7280' },
   thumbnailRow: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 14 },
   thumbnailButton: { width: 128, height: 82, borderRadius: 7, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent', position: 'relative' },

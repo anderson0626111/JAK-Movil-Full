@@ -7,9 +7,17 @@ const { width: screenWidth } = Dimensions.get('window');
 const CARD_WIDTH = Math.min(screenWidth * 0.55, 520);
 const CARD_MARGIN = -30;
 const SLIDE_INTERVAL = CARD_WIDTH + CARD_MARGIN * 2;
+const CENTER_SHIFT = 200;
+const carouselVehicles = [...vehicles, ...vehicles, ...vehicles];
 
-export function HeroImage() {
-  const [activeIndex, setActiveIndex] = useState(0);
+interface HeroImageProps {
+  onVehiclePress?: (vehicleId: string) => void;
+}
+
+export function HeroImage({ onVehiclePress }: HeroImageProps) {
+  const [activeIndex, setActiveIndex] = useState(
+    vehicles.length > 1 ? vehicles.length + 1 : vehicles.length
+  );
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -27,10 +35,21 @@ export function HeroImage() {
   const scrollToIndex = (index: number) => {
     setActiveIndex(index);
     scrollViewRef.current?.scrollTo({
-      x: index * SLIDE_INTERVAL,
+      x: index * SLIDE_INTERVAL + CENTER_SHIFT,
       animated: true,
     });
   };
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({
+        x: activeIndex * SLIDE_INTERVAL + CENTER_SHIFT,
+        animated: false,
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const handleNext = () => {
     const nextIndex = (activeIndex + 1) % vehicles.length;
@@ -50,9 +69,17 @@ export function HeroImage() {
           horizontal
           showsHorizontalScrollIndicator={false}
           scrollEnabled={false}
+          onContentSizeChange={() => {
+            requestAnimationFrame(() => {
+              scrollViewRef.current?.scrollTo({
+                x: activeIndex * SLIDE_INTERVAL + CENTER_SHIFT,
+                animated: false,
+              });
+            });
+          }}
           contentContainerStyle={styles.scrollContent}
         >
-          {vehicles.map((vehicleItem, index) => {
+          {carouselVehicles.map((vehicleItem, index) => {
             const vehicle = vehicleItem as any;
             const isActive = activeIndex === index;
             const isLeft = index < activeIndex;
@@ -65,8 +92,10 @@ export function HeroImage() {
             const imageSource = vehicle.imageUrl || vehicle.image;
 
             return (
-              <View
-                key={vehicle.id || index}
+              <TouchableOpacity
+                key={`${vehicle.id || 'vehicle'}-${index}`}
+                activeOpacity={0.9}
+                onPress={() => onVehiclePress?.(String(vehicle.id))}
                 style={[
                   styles.card,
                   isActive ? styles.activeCard : styles.inactiveCard,
@@ -108,7 +137,7 @@ export function HeroImage() {
                     </View>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </ScrollView>
@@ -128,7 +157,7 @@ export function HeroImage() {
               key={index}
               style={[
                 styles.dot,
-                activeIndex === index ? styles.activeDot : styles.inactiveDot,
+                activeIndex % vehicles.length === index ? styles.activeDot : styles.inactiveDot,
               ]}
             />
           ))}
