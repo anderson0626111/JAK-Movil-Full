@@ -67,25 +67,25 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
 
-  // Cargar todos los vehículos al inicializar
-  useEffect(() => {
-    async function loadAllVehicles() {
-      try {
-        const response = await fetch(`${API_URL}/api/vehiculos`);
-        if (response.ok) {
-          const data: ApiVehicle[] = await response.json();
-          const results = data.map(mapApiVehicle).slice(0, 6);
-          setCatalogVehicles(results);
-          setSearchMessage(
-            results.length === 1
-              ? 'Mostrando 1 vehículo disponible'
-              : `Mostrando ${results.length} vehículos disponibles`
-          );
-        }
-      } catch (error) {
-        console.error('Error cargando vehículos:', error);
+  async function loadAllVehicles() {
+    try {
+      const response = await fetch(`${API_URL}/api/vehiculos`);
+      if (response.ok) {
+        const data: ApiVehicle[] = await response.json();
+        const results = data.map(mapApiVehicle).slice(0, 6);
+        setCatalogVehicles(results);
+        setSearchMessage(
+          results.length === 1
+            ? 'Mostrando 1 vehículo disponible'
+            : `Mostrando ${results.length} vehículos disponibles`
+        );
       }
+    } catch (error) {
+      console.error('Error cargando vehículos:', error);
     }
+  }
+
+  useEffect(() => {
     loadAllVehicles();
   }, []);
 
@@ -189,7 +189,10 @@ export default function App() {
 
       <NavBar
         activePage={activeNavigationPage}
-        onHomePress={() => setCurrentPage('home')}
+        onHomePress={() => {
+          setCurrentPage('home');
+          loadAllVehicles();
+        }}
         onNewVehiclesPress={loadNewVehicles}
         onUsedVehiclesPress={loadUsedVehicles}
         onAboutPress={() => setCurrentPage('about')}
@@ -271,7 +274,10 @@ export default function App() {
       )}
 
       <Footer
-        onHomePress={() => setCurrentPage('home')}
+        onHomePress={() => {
+          setCurrentPage('home');
+          loadAllVehicles();
+        }}
         onNewVehiclesPress={loadNewVehicles}
         onUsedVehiclesPress={loadUsedVehicles}
         onContactPress={() => setCurrentPage('contact')}
