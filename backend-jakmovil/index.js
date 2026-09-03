@@ -7,6 +7,10 @@ const fs = require('fs');
 const app = express();
 const PORT = 3001;
 
+const fotoPortadaPorVehiculo = {
+  9: '2.jpg',
+};
+
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -48,10 +52,24 @@ function obtenerFotosVehiculo(req, id) {
   const carpeta = path.join(__dirname, 'uploads', nombreCarpeta);
   const extensionesPermitidas = /\.(jpg|jpeg|png|webp)$/i;
 
-  return fs
+  const archivos = fs
     .readdirSync(carpeta)
     .filter((archivo) => extensionesPermitidas.test(archivo))
-    .sort()
+    .sort((archivoA, archivoB) =>
+      archivoA.localeCompare(archivoB, undefined, { numeric: true })
+    );
+
+  const fotoPortada = fotoPortadaPorVehiculo[id];
+
+  if (fotoPortada) {
+    archivos.sort((archivoA, archivoB) => {
+      if (archivoA.toLowerCase() === fotoPortada.toLowerCase()) return -1;
+      if (archivoB.toLowerCase() === fotoPortada.toLowerCase()) return 1;
+      return 0;
+    });
+  }
+
+  return archivos
     .map((archivo) => {
       return `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(
         nombreCarpeta
@@ -92,6 +110,10 @@ app.get('/api/vehiculos/filtros', async (req, res) => {
       'SELECT DISTINCT marca FROM vehiculos WHERE marca IS NOT NULL ORDER BY marca ASC'
     );
 
+    const [anios] = await db.query(
+      'SELECT DISTINCT `año` AS anio FROM vehiculos ORDER BY `año` DESC'
+    );
+
     let consultaModelos =
       'SELECT DISTINCT modelo FROM vehiculos WHERE modelo IS NOT NULL';
 
@@ -109,6 +131,7 @@ app.get('/api/vehiculos/filtros', async (req, res) => {
     res.json({
       marcas: marcas.map((item) => item.marca),
       modelos: modelos.map((item) => item.modelo),
+      anios: anios.map((item) => item.anio),
     });
   } catch (error) {
     console.error('Error al cargar filtros:', error);
@@ -150,12 +173,12 @@ app.get('/api/vehiculos', async (req, res) => {
     }
 
     if (desde) {
-      sql += ' AND anio >= ?';
+      sql += ' AND `año` >= ?';
       parametros.push(desde);
     }
 
     if (hasta) {
-      sql += ' AND anio <= ?';
+      sql += ' AND `año` <= ?';
       parametros.push(hasta);
     }
 
@@ -169,7 +192,7 @@ app.get('/api/vehiculos', async (req, res) => {
       }
     }
 
-    sql += ' ORDER BY anio DESC, marca ASC, modelo ASC';
+    sql += ' ORDER BY `año` DESC, marca ASC, modelo ASC';
 
     const [vehiculos] = await db.query(sql, parametros);
 

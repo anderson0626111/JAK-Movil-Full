@@ -42,11 +42,17 @@ export function NavBar({
             <Text style={styles.navText}>INICIO</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navItem} onPress={onNewVehiclesPress}>
+          <TouchableOpacity
+            style={[styles.navItem, activePage === 'new' && styles.activeNavItem]}
+            onPress={onNewVehiclesPress}
+          >
             <Text style={styles.navText}>VEHÍCULOS NUEVOS</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navItem} onPress={onUsedVehiclesPress}>
+          <TouchableOpacity
+            style={[styles.navItem, activePage === 'used' && styles.activeNavItem]}
+            onPress={onUsedVehiclesPress}
+          >
             <Text style={styles.navText}>VEHÍCULOS USADOS</Text>
           </TouchableOpacity>
 
@@ -85,8 +91,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   logo: {
-    height: 70,
-    width: 220,
+    height: 92,
+    width: 240,
   },
   menuBar: {
     backgroundColor: '#262626',

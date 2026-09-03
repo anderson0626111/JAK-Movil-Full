@@ -23,7 +23,7 @@ interface ApiVehicle {
   id: number;
   marca: string;
   modelo: string;
-  anio: number;
+  año: number;
   precio: number;
   moneda: string;
   tipo: string;
@@ -47,7 +47,7 @@ function mapApiVehicle(vehicle: ApiVehicle): Vehicle {
     id: String(vehicle.id),
     title: `${vehicle.marca} ${vehicle.modelo}`,
     price: formatPrice(vehicle.precio, vehicle.moneda),
-    year: vehicle.anio,
+    year: vehicle.año,
     mileage: vehicle.tipo,
     transmission: vehicle.transmision,
     fuel: vehicle.combustible,
@@ -64,24 +64,34 @@ export default function App() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
     null
   );
+  const [detailsReturnPage, setDetailsReturnPage] = useState<
+    'home' | 'results' | 'new' | 'used'
+  >('home');
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
 
   async function loadAllVehicles() {
     try {
+      setIsSearching(true);
+      setSearchMessage('');
       const response = await fetch(`${API_URL}/api/vehiculos`);
-      if (response.ok) {
-        const data: ApiVehicle[] = await response.json();
-        const results = data.map(mapApiVehicle).slice(0, 6);
-        setCatalogVehicles(results);
-        setSearchMessage(
-          results.length === 1
-            ? 'Mostrando 1 vehículo disponible'
-            : `Mostrando ${results.length} vehículos disponibles`
-        );
+
+      if (!response.ok) {
+        throw new Error('No fue posible cargar el catálogo');
       }
+
+      const data: ApiVehicle[] = await response.json();
+      const results = data.map(mapApiVehicle).slice(0, 9);
+      setCatalogVehicles(results);
+      setSearchMessage('');
     } catch (error) {
       console.error('Error cargando vehículos:', error);
+      setCatalogVehicles([]);
+      setSearchMessage(
+        'No fue posible cargar el catálogo. Verifica que MySQL de XAMPP esté activo.'
+      );
+    } finally {
+      setIsSearching(false);
     }
   }
 
@@ -133,55 +143,85 @@ export default function App() {
   }
 
   function openVehicleDetails(vehicleId: string) {
+    if (
+      currentPage === 'results' ||
+      currentPage === 'new' ||
+      currentPage === 'used'
+    ) {
+      setDetailsReturnPage(currentPage);
+    } else {
+      setDetailsReturnPage('home');
+    }
+
     setSelectedVehicleId(vehicleId);
     setCurrentPage('details');
   }
 
   function returnToCatalog() {
     setSelectedVehicleId(null);
-    setCurrentPage('results');
+    setCurrentPage(detailsReturnPage);
   }
 
   async function loadNewVehicles() {
     try {
+      setCurrentPage('new');
+      setIsSearching(true);
+      setSearchMessage('');
       const response = await fetch(`${API_URL}/api/vehiculos?condicion=Nuevo`);
-      if (response.ok) {
-        const data: ApiVehicle[] = await response.json();
-        const results = data.map(mapApiVehicle);
-        setCatalogVehicles(results);
-        setCurrentPage('new');
-        setSearchMessage(
-          results.length === 1
-            ? 'Mostrando 1 vehículo nuevo'
-            : `Mostrando ${results.length} vehículos nuevos`
-        );
+
+      if (!response.ok) {
+        throw new Error('No fue posible cargar los vehículos nuevos');
       }
+
+      const data: ApiVehicle[] = await response.json();
+      const results = data.map(mapApiVehicle);
+      setCatalogVehicles(results);
+      setSearchMessage(
+        results.length === 1
+          ? 'Mostrando 1 vehículo nuevo'
+          : `Mostrando ${results.length} vehículos nuevos`
+      );
     } catch (error) {
       console.error('Error cargando vehículos nuevos:', error);
+      setCatalogVehicles([]);
+      setSearchMessage('No fue posible cargar los vehículos nuevos.');
+    } finally {
+      setIsSearching(false);
     }
   }
 
   async function loadUsedVehicles() {
     try {
+      setCurrentPage('used');
+      setIsSearching(true);
+      setSearchMessage('');
       const response = await fetch(`${API_URL}/api/vehiculos?condicion=Usado`);
-      if (response.ok) {
-        const data: ApiVehicle[] = await response.json();
-        const results = data.map(mapApiVehicle);
-        setCatalogVehicles(results);
-        setCurrentPage('used');
-        setSearchMessage(
-          results.length === 1
-            ? 'Mostrando 1 vehículo usado'
-            : `Mostrando ${results.length} vehículos usados`
-        );
+
+      if (!response.ok) {
+        throw new Error('No fue posible cargar los vehículos usados');
       }
+
+      const data: ApiVehicle[] = await response.json();
+      const results = data.map(mapApiVehicle);
+      setCatalogVehicles(results);
+      setSearchMessage(
+        results.length === 1
+          ? 'Mostrando 1 vehículo usado'
+          : `Mostrando ${results.length} vehículos usados`
+      );
     } catch (error) {
       console.error('Error cargando vehículos usados:', error);
+      setCatalogVehicles([]);
+      setSearchMessage('No fue posible cargar los vehículos usados.');
+    } finally {
+      setIsSearching(false);
     }
   }
 
   const activeNavigationPage =
-    currentPage === 'details' || currentPage === 'results' || currentPage === 'new' || currentPage === 'used' ? 'home' : currentPage;
+    currentPage === 'details' || currentPage === 'results'
+      ? 'home'
+      : currentPage;
 
   return (
     <ScrollView style={styles.container}>
@@ -239,7 +279,7 @@ export default function App() {
           <HeroImage onVehiclePress={openVehicleDetails} />
 
           <View style={styles.content}>
-            <Text style={styles.title}>Catálogo de Vehículos Disponibles</Text>
+            <Text style={styles.title}>Vehículos recién agregados</Text>
 
             {isSearching ? (
               <View style={styles.statusContainer}>

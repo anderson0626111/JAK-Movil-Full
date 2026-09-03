@@ -4,7 +4,7 @@ import { View, Text, Image, StyleSheet, TouchableOpacity, ActivityIndicator } fr
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface ApiVehicle {
-  id: number; marca: string; modelo: string; anio: number; precio: number; moneda: string;
+  id: number; marca: string; modelo: string; año: number; precio: number; moneda: string;
   tipo: string; condicion: string | null; transmision: string; combustible: string;
   imagen: string | null; fotos: string[]; color_exterior: string | null;
   color_interior: string | null; kilometraje: string | null; cilindraje: string | null;
@@ -61,14 +61,31 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
     loadVehicle();
   }, [vehicleId]);
 
+  function showPreviousPhoto() {
+    if (!vehicle || vehicle.fotos.length < 2) return;
+
+    const currentIndex = Math.max(vehicle.fotos.indexOf(selectedPhoto), 0);
+    const previousIndex =
+      (currentIndex - 1 + vehicle.fotos.length) % vehicle.fotos.length;
+    setSelectedPhoto(vehicle.fotos[previousIndex]);
+  }
+
+  function showNextPhoto() {
+    if (!vehicle || vehicle.fotos.length < 2) return;
+
+    const currentIndex = Math.max(vehicle.fotos.indexOf(selectedPhoto), 0);
+    const nextIndex = (currentIndex + 1) % vehicle.fotos.length;
+    setSelectedPhoto(vehicle.fotos[nextIndex]);
+  }
+
   if (loading) return <View style={styles.statusContainer}><ActivityIndicator size="large" color="#dc2626" /><Text style={styles.statusText}>Cargando vehículo...</Text></View>;
   if (error || !vehicle) return <View style={styles.statusContainer}><Text style={styles.errorText}>{error}</Text><TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>VOLVER A RESULTADOS</Text></TouchableOpacity></View>;
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>← VOLVER A RESULTADOS</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>← VOLVER</Text></TouchableOpacity>
       <View style={styles.headingRow}>
-        <View><Text style={styles.title}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{vehicle.anio} · {vehicle.condicion || vehicle.tipo}</Text></View>
+        <View><Text style={styles.title}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{vehicle.año} · {vehicle.condicion || vehicle.tipo}</Text></View>
         <Text style={styles.price}>{formatPrice(vehicle.precio, vehicle.moneda)}</Text>
       </View>
 
@@ -79,6 +96,24 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
               <Image source={{ uri: selectedPhoto }} style={styles.imageBackdrop} resizeMode="cover" blurRadius={18} />
               <View style={styles.imageBackdropOverlay} />
               <Image source={{ uri: selectedPhoto }} style={styles.mainImage} resizeMode="contain" />
+              {vehicle.fotos.length > 1 && (
+                <>
+                  <TouchableOpacity
+                    accessibilityLabel="Foto anterior"
+                    style={[styles.galleryArrow, styles.galleryArrowLeft]}
+                    onPress={showPreviousPhoto}
+                  >
+                    <Text style={styles.galleryArrowText}>‹</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityLabel="Foto siguiente"
+                    style={[styles.galleryArrow, styles.galleryArrowRight]}
+                    onPress={showNextPhoto}
+                  >
+                    <Text style={styles.galleryArrowText}>›</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </>
           ) : <View style={styles.imageFallback}><Text style={styles.fallbackText}>No hay fotografías disponibles</Text></View>}
         </View>
@@ -92,7 +127,7 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
       <View style={styles.detailsCard}>
         <Text style={styles.sectionTitle}>Información del vehículo</Text>
         <View style={styles.infoGrid}>
-          <InfoRow label="Marca" value={vehicle.marca} /><InfoRow label="Modelo" value={vehicle.modelo} /><InfoRow label="Año" value={vehicle.anio} />
+          <InfoRow label="Marca" value={vehicle.marca} /><InfoRow label="Modelo" value={vehicle.modelo} /><InfoRow label="Año" value={vehicle.año} />
           <InfoRow label="Tipo" value={vehicle.tipo} /><InfoRow label="Condición" value={vehicle.condicion} /><InfoRow label="Transmisión" value={vehicle.transmision} />
           <InfoRow label="Combustible" value={vehicle.combustible} /><InfoRow label="Color exterior" value={vehicle.color_exterior} /><InfoRow label="Color interior" value={vehicle.color_interior} />
           <InfoRow label="Kilometraje" value={vehicle.kilometraje} /><InfoRow label="Cilindraje" value={vehicle.cilindraje} /><InfoRow label="Tracción" value={vehicle.traccion} />
@@ -121,6 +156,8 @@ const styles = StyleSheet.create({
   imageBackdrop: { position: 'absolute', width: '100%', height: '100%', opacity: 0.45 },
   imageBackdropOverlay: { position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,0.35)' },
   mainImage: { width: '100%', height: '100%' }, imageFallback: { flex: 1, justifyContent: 'center', alignItems: 'center' }, fallbackText: { color: '#6b7280' },
+  galleryArrow: { position: 'absolute', top: '50%', marginTop: -23, width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(0,0,0,0.68)', justifyContent: 'center', alignItems: 'center', zIndex: 5 },
+  galleryArrowLeft: { left: 14 }, galleryArrowRight: { right: 14 }, galleryArrowText: { color: '#fff', fontSize: 34, fontWeight: 'bold', lineHeight: 38, marginTop: -3 },
   thumbnailRow: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 14 },
   thumbnailButton: { width: 128, height: 82, borderRadius: 7, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent', position: 'relative' },
   thumbnailSelected: { borderColor: '#dc2626' }, thumbnail: { width: '100%', height: '100%' },

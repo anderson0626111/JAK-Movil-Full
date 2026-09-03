@@ -1,23 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Image, StyleSheet, View, ScrollView, Dimensions, TouchableOpacity, Text } from 'react-native';
+import { Image, StyleSheet, View, ScrollView, TouchableOpacity, Text, useWindowDimensions } from 'react-native';
 import { vehicles } from '../../data/vehicleData';
 
-const { width: screenWidth } = Dimensions.get('window');
-
-const CARD_WIDTH = Math.min(screenWidth * 0.55, 520);
 const CARD_MARGIN = -30;
-const SLIDE_INTERVAL = CARD_WIDTH + CARD_MARGIN * 2;
-const CENTER_SHIFT = 200;
-const carouselVehicles = [...vehicles, ...vehicles, ...vehicles];
 
 interface HeroImageProps {
   onVehiclePress?: (vehicleId: string) => void;
 }
 
 export function HeroImage({ onVehiclePress }: HeroImageProps) {
-  const [activeIndex, setActiveIndex] = useState(
-    vehicles.length > 1 ? vehicles.length + 1 : vehicles.length
-  );
+  const { width } = useWindowDimensions();
+  const viewportWidth = Math.min(width, 1200);
+  const cardWidth = Math.min(viewportWidth * 0.55, 520);
+  const slideInterval = cardWidth + CARD_MARGIN * 2;
+  const horizontalPadding = (viewportWidth - cardWidth) / 2 - CARD_MARGIN;
+  const [activeIndex, setActiveIndex] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -35,7 +32,7 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
   const scrollToIndex = (index: number) => {
     setActiveIndex(index);
     scrollViewRef.current?.scrollTo({
-      x: index * SLIDE_INTERVAL + CENTER_SHIFT,
+      x: index * slideInterval,
       animated: true,
     });
   };
@@ -43,13 +40,13 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       scrollViewRef.current?.scrollTo({
-        x: activeIndex * SLIDE_INTERVAL + CENTER_SHIFT,
+        x: activeIndex * slideInterval,
         animated: false,
       });
     });
 
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [slideInterval]);
 
   const handleNext = () => {
     const nextIndex = (activeIndex + 1) % vehicles.length;
@@ -72,14 +69,17 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
           onContentSizeChange={() => {
             requestAnimationFrame(() => {
               scrollViewRef.current?.scrollTo({
-                x: activeIndex * SLIDE_INTERVAL + CENTER_SHIFT,
+                x: activeIndex * slideInterval,
                 animated: false,
               });
             });
           }}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingHorizontal: horizontalPadding },
+          ]}
         >
-          {carouselVehicles.map((vehicleItem, index) => {
+          {vehicles.map((vehicleItem, index) => {
             const vehicle = vehicleItem as any;
             const isActive = activeIndex === index;
             const isLeft = index < activeIndex;
@@ -98,6 +98,7 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
                 onPress={() => onVehiclePress?.(String(vehicle.id))}
                 style={[
                   styles.card,
+                  { width: cardWidth },
                   isActive ? styles.activeCard : styles.inactiveCard,
                   {
                     transform: [
@@ -181,11 +182,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scrollContent: {
-    paddingHorizontal: (screenWidth - CARD_WIDTH) / 2 - CARD_MARGIN,
     alignItems: 'center',
   },
   card: {
-    width: CARD_WIDTH,
     height: 380,
     marginHorizontal: CARD_MARGIN,
     borderRadius: 12,

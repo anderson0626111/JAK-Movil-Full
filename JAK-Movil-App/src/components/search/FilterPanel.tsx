@@ -21,6 +21,12 @@ interface FilterPanelProps {
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
+const currentYear = new Date().getFullYear();
+const defaultYears = Array.from(
+  { length: currentYear - 1999 },
+  (_, index) => currentYear - index
+);
+
 export function FilterPanel({ onSearch }: FilterPanelProps) {
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
@@ -28,13 +34,8 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
   const [yearTo, setYearTo] = useState('');
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
+  const [years, setYears] = useState<number[]>(defaultYears);
   const [loading, setLoading] = useState(true);
-
-  const currentYear = new Date().getFullYear();
-  const years = Array.from(
-    { length: currentYear - 1999 },
-    (_, index) => currentYear - index
-  );
 
   async function loadFilters(selectedBrand = '') {
     try {
@@ -54,6 +55,9 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
 
       setBrands(data.marcas || []);
       setModels(data.modelos || []);
+      if (Array.isArray(data.anios) && data.anios.length > 0) {
+        setYears(data.anios.map(Number).filter(Number.isFinite));
+      }
     } catch (error) {
       console.error('Error cargando filtros:', error);
       setBrands([]);
