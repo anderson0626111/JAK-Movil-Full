@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { API_URL } from '../../config/api';
 
 export interface SearchFilters {
   marca: string;
@@ -18,8 +19,6 @@ export interface SearchFilters {
 interface FilterPanelProps {
   onSearch: (filters: SearchFilters) => void;
 }
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
 const currentYear = new Date().getFullYear();
 const defaultYears = Array.from(

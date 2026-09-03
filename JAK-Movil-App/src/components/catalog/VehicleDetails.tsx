@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+import { API_URL } from '../../config/api';
 
 interface ApiVehicle {
   id: number; marca: string; modelo: string; año: number; precio: number; moneda: string;

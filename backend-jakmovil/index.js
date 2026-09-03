@@ -82,6 +82,8 @@ function agregarFotos(req, vehiculo) {
 
   return {
     ...vehiculo,
+    anio: vehiculo.anio ?? vehiculo.año,
+    año: vehiculo.año ?? vehiculo.anio,
     imagen: fotos.length > 0 ? fotos[0] : vehiculo.imagen,
     fotos,
   };
@@ -111,7 +113,7 @@ app.get('/api/vehiculos/filtros', async (req, res) => {
     );
 
     const [anios] = await db.query(
-      'SELECT DISTINCT `año` AS anio FROM vehiculos ORDER BY `año` DESC'
+      'SELECT DISTINCT anio AS anio FROM vehiculos ORDER BY anio DESC'
     );
 
     let consultaModelos =
@@ -173,12 +175,12 @@ app.get('/api/vehiculos', async (req, res) => {
     }
 
     if (desde) {
-      sql += ' AND `año` >= ?';
+      sql += ' AND anio >= ?';
       parametros.push(desde);
     }
 
     if (hasta) {
-      sql += ' AND `año` <= ?';
+      sql += ' AND anio <= ?';
       parametros.push(hasta);
     }
 
@@ -192,7 +194,7 @@ app.get('/api/vehiculos', async (req, res) => {
       }
     }
 
-    sql += ' ORDER BY `año` DESC, marca ASC, modelo ASC';
+    sql += ' ORDER BY anio DESC, marca ASC, modelo ASC';
 
     const [vehiculos] = await db.query(sql, parametros);
 

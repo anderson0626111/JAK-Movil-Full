@@ -16,14 +16,14 @@ import { HeroImage } from './components/images/HeroImage';
 import { Footer } from './components/navigation/Footer';
 import { ContactPage } from './components/Contact/ContactPage';
 import { AboutPage } from './components/about/AboutPage';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+import { API_URL } from './config/api';
 
 interface ApiVehicle {
   id: number;
   marca: string;
   modelo: string;
-  año: number;
+  anio?: number;
+  año?: number;
   precio: number;
   moneda: string;
   tipo: string;
@@ -43,11 +43,13 @@ function formatPrice(price: number, currency: string) {
 }
 
 function mapApiVehicle(vehicle: ApiVehicle): Vehicle {
+  const year = vehicle.anio ?? vehicle.año ?? 0;
+
   return {
     id: String(vehicle.id),
     title: `${vehicle.marca} ${vehicle.modelo}`,
     price: formatPrice(vehicle.precio, vehicle.moneda),
-    year: vehicle.año,
+    year,
     mileage: vehicle.tipo,
     transmission: vehicle.transmision,
     fuel: vehicle.combustible,
