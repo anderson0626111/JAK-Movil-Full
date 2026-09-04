@@ -8,5 +8,8 @@
     "frontend": "npm run web --prefix JAK-Movil-App",
     "backend": "npm run dev --prefix backend-jakmovil",
     "setup": "npm install --prefix backend-jakmovil && npm install --prefix JAK-Movil-App"
+  },
+  "dependencies": {
+    "expo": "^57.0.19"
   }
 }

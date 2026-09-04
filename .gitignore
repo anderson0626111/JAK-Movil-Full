@@ -26,6 +26,7 @@ backend-jakmovil/public/images/
 Thumbs.db
 dist/
 build/
+.codex-build-check/
 .vscode/
 *.tmp
 

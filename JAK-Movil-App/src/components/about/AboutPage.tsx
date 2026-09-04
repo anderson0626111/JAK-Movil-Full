@@ -1,19 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { ScrollReveal } from '../animation/ScrollReveal';
 
 export function AboutPage() {
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       {/* Banner Principal */}
-      <View style={styles.heroBanner}>
-        <Text style={styles.heroSubtitle}>CONOCE NUESTRA HISTORIA</Text>
-        <Text style={styles.heroTitle}>Pasión, Trabajo Duro y Pasión por los Autos</Text>
-      </View>
+      <ScrollReveal>
+        <View style={styles.heroBanner}>
+          <Text style={styles.heroSubtitle}>CONOCE NUESTRA HISTORIA</Text>
+          <Text style={styles.heroTitle}>Pasión, Trabajo Duro y Pasión por los Autos</Text>
+        </View>
+      </ScrollReveal>
 
       <View style={styles.contentContainer}>
         {/* Sección Historia / Biografía */}
-        <View style={styles.storySection}>
-          <View style={styles.textColumn}>
+        <ScrollReveal>
+          <View style={styles.storySection}>
+            <View style={styles.textColumn}>
             <Text style={styles.badge}>NUESTRO FUNDADOR</Text>
             <Text style={styles.sectionTitle}>Bernardo Vásquez Reyes</Text>
             
@@ -32,28 +36,30 @@ export function AboutPage() {
             <Text style={styles.paragraph}>
               Hoy, con más de <Text style={styles.boldText}>4 años de trayectoria</Text>, Rosybel Auto Sales se ha consolidado como un dealer de confianza en la zona de Verón - Punta Cana, ofreciendo asesoría transparente y vehículos en óptimas condiciones mecánicas y estéticas.
             </Text>
+            </View>
           </View>
-        </View>
+        </ScrollReveal>
 
         {/* Sección Misión, Visión y Valores */}
-        <View style={styles.cardsGrid}>
-          <View style={styles.card}>
+        <ScrollReveal delay={70}>
+          <View style={styles.cardsGrid}>
+            <View style={styles.card}>
             <Text style={styles.cardIcon}></Text>
             <Text style={styles.cardTitle}>NUESTRA MISIÓN</Text>
             <Text style={styles.cardDescription}>
               Brindar a nuestros clientes en la República Dominicana vehículos de alta calidad, seleccionados e inspeccionados rigurosamente por expertos en la materia.
             </Text>
-          </View>
+            </View>
 
-          <View style={styles.card}>
+            <View style={styles.card}>
             <Text style={styles.cardIcon}></Text>
             <Text style={styles.cardTitle}>NUESTRA VISIÓN</Text>
             <Text style={styles.cardDescription}>
               Ser el dealer líder y más confiable de la región Este del país, reconocido por la honestidad, la excelencia en el servicio y la atención personalizada.
             </Text>
-          </View>
+            </View>
 
-          <View style={styles.card}>
+            <View style={styles.card}>
             <Text style={styles.cardIcon}></Text>
             <Text style={styles.cardTitle}>NUESTROS VALORES</Text>
             <Text style={styles.cardDescription}>
@@ -62,28 +68,31 @@ export function AboutPage() {
               • Pasión por los Detalles{'\n'}
               • Compromiso con el Cliente
             </Text>
+            </View>
           </View>
-        </View>
+        </ScrollReveal>
 
         {/* Banner de Experiencia */}
-        <View style={styles.statsBanner}>
-          <View style={styles.statItem}>
+        <ScrollReveal delay={90}>
+          <View style={styles.statsBanner}>
+            <View style={styles.statItem}>
             <Text style={styles.statNumber}>4+</Text>
             <Text style={styles.statLabel}>Años de Trayectoria</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
             <Text style={styles.statNumber}>100%</Text>
             <Text style={styles.statLabel}>Inspección Técnica Garantizada</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
             <Text style={styles.statNumber}>RD & EE.UU.</Text>
             <Text style={styles.statLabel}>Conexión Directa de Importación</Text>
+            </View>
           </View>
-        </View>
+        </ScrollReveal>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 

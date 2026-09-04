@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Linking, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Linking } from 'react-native';
+import { ScrollReveal } from '../animation/ScrollReveal';
 
 export function ContactPage() {
   const [formData, setFormData] = useState({
@@ -24,8 +25,9 @@ export function ContactPage() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.card}>
+    <View style={styles.container}>
+      <ScrollReveal style={styles.formReveal}>
+        <View style={styles.card}>
         <Text style={styles.title}>Ponte en Contacto con Nosotros</Text>
         <Text style={styles.subtitle}>
           ¿Tienes alguna duda o te interesa un vehículo? Escríbenos y te responderemos a la brevedad.
@@ -81,24 +83,27 @@ export function ContactPage() {
         <TouchableOpacity style={styles.sendButton} onPress={handleSendWhatsApp}>
           <Text style={styles.sendButtonText}>ENVIAR POR WHATSAPP 📲</Text>
         </TouchableOpacity>
-      </View>
+        </View>
+      </ScrollReveal>
 
       {/* Información Directa */}
-      <View style={styles.infoSection}>
-        <View style={styles.infoBox}>
+      <ScrollReveal style={styles.infoReveal} delay={90}>
+        <View style={styles.infoSection}>
+          <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>📍 Ubicación</Text>
           <Text style={styles.infoText}>Bávaro, La Altagracia, República Dominicana</Text>
-        </View>
-        <View style={styles.infoBox}>
+          </View>
+          <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>📞 Atención Directa</Text>
           <Text style={styles.infoText}>+1 (809) 474-8410</Text>
-        </View>
-        <View style={styles.infoBox}>
+          </View>
+          <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>✉️ Correo Electrónico</Text>
           <Text style={styles.infoText}>contacto@rosybelautosales.com</Text>
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollReveal>
+    </View>
   );
 }
 
@@ -106,6 +111,14 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     alignItems: 'center',
+    width: '100%',
+  },
+  formReveal: {
+    maxWidth: 800,
+    width: '100%',
+  },
+  infoReveal: {
+    maxWidth: 800,
     width: '100%',
   },
   card: {

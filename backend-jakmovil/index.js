@@ -113,7 +113,7 @@ app.get('/api/vehiculos/filtros', async (req, res) => {
     );
 
     const [anios] = await db.query(
-      'SELECT DISTINCT anio AS anio FROM vehiculos ORDER BY anio DESC'
+      'SELECT DISTINCT `año` AS anio FROM vehiculos ORDER BY `año` DESC'
     );
 
     let consultaModelos =
@@ -175,12 +175,12 @@ app.get('/api/vehiculos', async (req, res) => {
     }
 
     if (desde) {
-      sql += ' AND anio >= ?';
+      sql += ' AND `año` >= ?';
       parametros.push(desde);
     }
 
     if (hasta) {
-      sql += ' AND anio <= ?';
+      sql += ' AND `año` <= ?';
       parametros.push(hasta);
     }
 
@@ -194,7 +194,7 @@ app.get('/api/vehiculos', async (req, res) => {
       }
     }
 
-    sql += ' ORDER BY anio DESC, marca ASC, modelo ASC';
+    sql += ' ORDER BY `año` DESC, marca ASC, modelo ASC';
 
     const [vehiculos] = await db.query(sql, parametros);
 

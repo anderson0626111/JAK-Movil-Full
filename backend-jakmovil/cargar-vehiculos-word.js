@@ -29,7 +29,7 @@ async function run() {
   const [backupRows] = await db.query(`SELECT COUNT(*) total FROM ${backup}`);
   if (backupRows[0].total === 0) await db.query(`INSERT INTO ${backup} SELECT * FROM vehiculos`);
 
-  const sql = `UPDATE vehiculos SET marca=?, modelo=?, anio=?, precio=?, moneda=?, tipo=?, condicion=?, transmision=?, combustible=?, color_exterior=?, color_interior=?, kilometraje=?, cilindraje=?, traccion=?, sector=?, vendedor=?, accesorios=?, equipamiento=?, descripcion=? WHERE id=?`;
+  const sql = `UPDATE vehiculos SET marca=?, modelo=?, \`año\`=?, precio=?, moneda=?, tipo=?, condicion=?, transmision=?, combustible=?, color_exterior=?, color_interior=?, kilometraje=?, cilindraje=?, traccion=?, sector=?, vendedor=?, accesorios=?, equipamiento=?, descripcion=? WHERE id=?`;
   for (const v of vehicles) {
     await db.query(sql, [v.marca, v.modelo, v.year, v.precio, v.moneda, v.tipo, v.condicion, v.transmision, v.combustible, v.color_exterior || null, v.color_interior || null, v.kilometraje || null, v.cilindraje || null, v.traccion || null, v.sector || null, v.vendedor || null, v.accesorios || null, v.equipamiento || null, v.descripcion || null, v.id]);
   }

@@ -113,8 +113,15 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
                 <View style={styles.imageContainer}>
                   <Image
                     source={typeof imageSource === 'string' ? { uri: imageSource } : imageSource}
-                    style={styles.image}
+                    style={styles.imageBackdrop}
                     resizeMode="cover"
+                    blurRadius={14}
+                  />
+                  <View style={styles.imageBackdropOverlay} />
+                  <Image
+                    source={typeof imageSource === 'string' ? { uri: imageSource } : imageSource}
+                    style={styles.image}
+                    resizeMode="contain"
                   />
                   {!isActive && <View style={styles.overlay} />}
                 </View>
@@ -209,12 +216,25 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 220,
     position: 'relative',
-    backgroundColor: '#ffffff', // Fondo donde reposa la imagen
-    padding: 8, // Margen interno para que la imagen no toque los bordes
+    overflow: 'hidden',
+    backgroundColor: '#e5e7eb',
+  },
+  imageBackdrop: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 0.42,
+  },
+  imageBackdropOverlay: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
   },
   image: {
     width: '100%',
     height: '100%',
+    zIndex: 1,
   },
   overlay: {
     position: 'absolute',

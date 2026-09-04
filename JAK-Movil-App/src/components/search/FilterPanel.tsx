@@ -22,8 +22,8 @@ interface FilterPanelProps {
 
 const currentYear = new Date().getFullYear();
 const defaultYears = Array.from(
-  { length: currentYear - 1999 },
-  (_, index) => currentYear - index
+  { length: currentYear + 1 - 1900 + 1 },
+  (_, index) => currentYear + 1 - index
 );
 
 export function FilterPanel({ onSearch }: FilterPanelProps) {
@@ -33,7 +33,6 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
   const [yearTo, setYearTo] = useState('');
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
-  const [years, setYears] = useState<number[]>(defaultYears);
   const [loading, setLoading] = useState(true);
 
   async function loadFilters(selectedBrand = '') {
@@ -54,9 +53,6 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
 
       setBrands(data.marcas || []);
       setModels(data.modelos || []);
-      if (Array.isArray(data.anios) && data.anios.length > 0) {
-        setYears(data.anios.map(Number).filter(Number.isFinite));
-      }
     } catch (error) {
       console.error('Error cargando filtros:', error);
       setBrands([]);
@@ -132,7 +128,7 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
               style={styles.picker}
             >
               <Picker.Item label="Cualquier año" value="" />
-              {years.map((year) => (
+              {defaultYears.map((year) => (
                 <Picker.Item
                   key={`from-${year}`}
                   label={year.toString()}
@@ -152,7 +148,7 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
               style={styles.picker}
             >
               <Picker.Item label="Cualquier año" value="" />
-              {years.map((year) => (
+              {defaultYears.map((year) => (
                 <Picker.Item
                   key={`to-${year}`}
                   label={year.toString()}

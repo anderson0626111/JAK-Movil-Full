@@ -6,7 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavBar } from './components/navigation/NavBar';
 import { FilterPanel, SearchFilters } from './components/search/FilterPanel';
 import { vehicles } from './data/vehicleData';
@@ -16,6 +16,7 @@ import { HeroImage } from './components/images/HeroImage';
 import { Footer } from './components/navigation/Footer';
 import { ContactPage } from './components/Contact/ContactPage';
 import { AboutPage } from './components/about/AboutPage';
+import { ScrollReveal } from './components/animation/ScrollReveal';
 import { API_URL } from './config/api';
 
 interface ApiVehicle {
@@ -58,6 +59,7 @@ function mapApiVehicle(vehicle: ApiVehicle): Vehicle {
 }
 
 export default function App() {
+  const pageScrollRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState<
     'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used'
   >('home');
@@ -71,6 +73,23 @@ export default function App() {
   >('home');
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
+
+  function scrollToTop() {
+    requestAnimationFrame(() => {
+      pageScrollRef.current?.scrollTo({ y: 0, animated: false });
+    });
+  }
+
+  function navigateTo(
+    page: 'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used'
+  ) {
+    setCurrentPage(page);
+    scrollToTop();
+  }
+
+  useEffect(() => {
+    scrollToTop();
+  }, [currentPage, selectedVehicleId]);
 
   async function loadAllVehicles() {
     try {
@@ -103,7 +122,7 @@ export default function App() {
 
   async function handleSearch(filters: SearchFilters) {
     try {
-      setCurrentPage('results');
+      navigateTo('results');
       setIsSearching(true);
       setSearchMessage('');
 
@@ -156,17 +175,17 @@ export default function App() {
     }
 
     setSelectedVehicleId(vehicleId);
-    setCurrentPage('details');
+    navigateTo('details');
   }
 
   function returnToCatalog() {
     setSelectedVehicleId(null);
-    setCurrentPage(detailsReturnPage);
+    navigateTo(detailsReturnPage);
   }
 
   async function loadNewVehicles() {
     try {
-      setCurrentPage('new');
+      navigateTo('new');
       setIsSearching(true);
       setSearchMessage('');
       const response = await fetch(`${API_URL}/api/vehiculos?condicion=Nuevo`);
@@ -194,7 +213,7 @@ export default function App() {
 
   async function loadUsedVehicles() {
     try {
-      setCurrentPage('used');
+      navigateTo('used');
       setIsSearching(true);
       setSearchMessage('');
       const response = await fetch(`${API_URL}/api/vehiculos?condicion=Usado`);
@@ -226,19 +245,22 @@ export default function App() {
       : currentPage;
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      ref={pageScrollRef}
+      style={styles.container}
+    >
       <StatusBar style="light" />
 
       <NavBar
         activePage={activeNavigationPage}
         onHomePress={() => {
-          setCurrentPage('home');
+          navigateTo('home');
           loadAllVehicles();
         }}
         onNewVehiclesPress={loadNewVehicles}
         onUsedVehiclesPress={loadUsedVehicles}
-        onAboutPress={() => setCurrentPage('about')}
-        onContactPress={() => setCurrentPage('contact')}
+        onAboutPress={() => navigateTo('about')}
+        onContactPress={() => navigateTo('contact')}
       />
 
       {currentPage === 'details' && selectedVehicleId ? (
@@ -248,18 +270,24 @@ export default function App() {
         />
       ) : currentPage === 'results' || currentPage === 'new' || currentPage === 'used' ? (
         <View style={styles.content}>
-          <Text style={styles.title}>{currentPage === 'new' ? 'Vehículos Nuevos' : currentPage === 'used' ? 'Vehículos Usados' : 'Resultados de búsqueda'}</Text>
+          <ScrollReveal style={styles.revealSection}>
+            <Text style={styles.title}>{currentPage === 'new' ? 'Vehículos Nuevos' : currentPage === 'used' ? 'Vehículos Usados' : 'Resultados de búsqueda'}</Text>
+            {!!searchMessage && <Text style={styles.resultsText}>{searchMessage}</Text>}
+          </ScrollReveal>
           {isSearching ? (
-            <View style={styles.statusContainer}>
-              <ActivityIndicator size="large" color="#dc2626" />
-              <Text style={styles.statusText}>Buscando vehículos...</Text>
-            </View>
+            <ScrollReveal>
+              <View style={styles.statusContainer}>
+                <ActivityIndicator size="large" color="#dc2626" />
+                <Text style={styles.statusText}>Buscando vehículos...</Text>
+              </View>
+            </ScrollReveal>
           ) : (
             <>
-              <Text style={styles.resultsText}>{searchMessage}</Text>
               <View style={styles.catalogContainer}>
-                {catalogVehicles.map((vehicle) => (
-                  <VehicleCard key={vehicle.id} vehicle={vehicle} onPress={() => openVehicleDetails(vehicle.id)} />
+                {catalogVehicles.map((vehicle, index) => (
+                  <ScrollReveal key={vehicle.id} delay={(index % 3) * 70}>
+                    <VehicleCard vehicle={vehicle} onPress={() => openVehicleDetails(vehicle.id)} />
+                  </ScrollReveal>
                 ))}
               </View>
               {catalogVehicles.length === 0 && <Text style={styles.emptyText}>No encontramos vehículos con esos filtros.</Text>}
@@ -272,60 +300,72 @@ export default function App() {
         <AboutPage />
       ) : (
         <>
-          <View style={styles.heroSection}>
-            <View style={styles.filterWrapper}>
-              <FilterPanel onSearch={handleSearch} />
-            </View>
-          </View>
-
-          <HeroImage onVehiclePress={openVehicleDetails} />
-
-          <View style={styles.content}>
-            <Text style={styles.title}>Vehículos recién agregados</Text>
-
-            {isSearching ? (
-              <View style={styles.statusContainer}>
-                <ActivityIndicator size="large" color="#dc2626" />
-                <Text style={styles.statusText}>Buscando vehículos...</Text>
+          <ScrollReveal style={styles.revealSection}>
+            <View style={styles.heroSection}>
+              <View style={styles.filterWrapper}>
+                <FilterPanel onSearch={handleSearch} />
               </View>
-            ) : (
-              <>
-                {!!searchMessage && (
-                  <Text style={styles.resultsText}>{searchMessage}</Text>
-                )}
+            </View>
+          </ScrollReveal>
 
-                <View style={styles.catalogContainer}>
-                  {catalogVehicles.map((vehicle) => (
-                    <VehicleCard
-                      key={vehicle.id}
-                      vehicle={vehicle}
-                      onPress={() => openVehicleDetails(vehicle.id)}
-                    />
-                  ))}
+          <ScrollReveal style={styles.revealSection} delay={80}>
+            <HeroImage onVehiclePress={openVehicleDetails} />
+          </ScrollReveal>
+
+          <ScrollReveal style={styles.revealSection} delay={60}>
+            <View style={styles.content}>
+              <Text style={styles.title}>Vehículos recién agregados</Text>
+
+              {isSearching ? (
+                <View style={styles.statusContainer}>
+                  <ActivityIndicator size="large" color="#dc2626" />
+                  <Text style={styles.statusText}>Buscando vehículos...</Text>
                 </View>
+              ) : (
+                <>
+                  {!!searchMessage && (
+                    <Text style={styles.resultsText}>{searchMessage}</Text>
+                  )}
 
-                {catalogVehicles.length === 0 && (
-                  <Text style={styles.emptyText}>
-                    No encontramos vehículos con esos filtros.
-                  </Text>
-                )}
-              </>
-            )}
-          </View>
+                  <View style={styles.catalogContainer}>
+                    {catalogVehicles.map((vehicle, index) => (
+                      <ScrollReveal key={vehicle.id} delay={(index % 3) * 70}>
+                        <VehicleCard
+                          vehicle={vehicle}
+                          onPress={() => openVehicleDetails(vehicle.id)}
+                        />
+                      </ScrollReveal>
+                    ))}
+                  </View>
+
+                  {catalogVehicles.length === 0 && (
+                    <Text style={styles.emptyText}>
+                      No encontramos vehículos con esos filtros.
+                    </Text>
+                  )}
+                </>
+              )}
+            </View>
+          </ScrollReveal>
         </>
       )}
 
-      <Footer
-        onHomePress={() => {
-          setCurrentPage('home');
-          loadAllVehicles();
-        }}
-        onNewVehiclesPress={loadNewVehicles}
-        onUsedVehiclesPress={loadUsedVehicles}
-        onContactPress={() => setCurrentPage('contact')}
-        onCatalogPress={() => setCurrentPage('home')}
-        onAboutPress={() => setCurrentPage('about')}
-      />
+      <ScrollReveal style={styles.revealSection}>
+        <Footer
+          onHomePress={() => {
+            navigateTo('home');
+            loadAllVehicles();
+          }}
+          onNewVehiclesPress={loadNewVehicles}
+          onUsedVehiclesPress={loadUsedVehicles}
+          onContactPress={() => navigateTo('contact')}
+          onCatalogPress={() => {
+            navigateTo('home');
+            loadAllVehicles();
+          }}
+          onAboutPress={() => navigateTo('about')}
+        />
+      </ScrollReveal>
     </ScrollView>
   );
 }
@@ -334,6 +374,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  revealSection: {
+    width: '100%',
   },
   heroSection: {
     width: '100%',
