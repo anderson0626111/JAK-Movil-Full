@@ -5,6 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { API_URL } from '../../config/api';
@@ -27,6 +29,8 @@ const defaultYears = Array.from(
 );
 
 export function FilterPanel({ onSearch }: FilterPanelProps) {
+  const { width } = useWindowDimensions();
+  const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
   const [yearFrom, setYearFrom] = useState('');
@@ -82,11 +86,13 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.headerTitle}>Encuentra tu Vehículo</Text>
+    <View style={[styles.container, isMobileWeb && styles.containerMobile]}>
+      <Text style={[styles.headerTitle, isMobileWeb && styles.headerTitleMobile]}>
+        Encuentra tu Vehículo
+      </Text>
 
       <View style={styles.filterRow}>
-        <View style={styles.inputGroup}>
+        <View style={[styles.inputGroup, isMobileWeb && styles.inputGroupMobile]}>
           <Text style={styles.label}>MARCA</Text>
           <View style={styles.pickerContainer}>
             <Picker
@@ -102,7 +108,7 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
           </View>
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={[styles.inputGroup, isMobileWeb && styles.inputGroupMobile]}>
           <Text style={styles.label}>MODELO</Text>
           <View style={styles.pickerContainer}>
             <Picker
@@ -119,7 +125,7 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
           </View>
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={[styles.inputGroup, isMobileWeb && styles.inputGroupMobile]}>
           <Text style={styles.label}>AÑO DESDE</Text>
           <View style={styles.pickerContainer}>
             <Picker
@@ -139,7 +145,7 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
           </View>
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={[styles.inputGroup, isMobileWeb && styles.inputGroupMobile]}>
           <Text style={styles.label}>AÑO HASTA</Text>
           <View style={styles.pickerContainer}>
             <Picker
@@ -160,7 +166,11 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
         </View>
 
         <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
+          style={[
+            styles.button,
+            isMobileWeb && styles.buttonMobile,
+            loading && styles.buttonDisabled,
+          ]}
           onPress={handleSearch}
           disabled={loading}
         >
@@ -184,11 +194,17 @@ const styles = StyleSheet.create({
     elevation: 3,
     width: '100%',
   },
+  containerMobile: {
+    padding: 14,
+  },
   headerTitle: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#111827',
     marginBottom: 16,
+  },
+  headerTitleMobile: {
+    fontSize: 20,
   },
   filterRow: {
     flexDirection: 'row',
@@ -199,6 +215,11 @@ const styles = StyleSheet.create({
   inputGroup: {
     flex: 1,
     minWidth: 160,
+  },
+  inputGroupMobile: {
+    flexBasis: '100%',
+    minWidth: 0,
+    width: '100%',
   },
   label: {
     fontSize: 12,
@@ -226,6 +247,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     minWidth: 180,
+  },
+  buttonMobile: {
+    width: '100%',
+    minWidth: 0,
+    marginTop: 2,
   },
   buttonDisabled: {
     opacity: 0.65,

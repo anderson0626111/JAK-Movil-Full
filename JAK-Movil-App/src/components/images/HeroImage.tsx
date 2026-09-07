@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Image, StyleSheet, View, ScrollView, TouchableOpacity, Text, useWindowDimensions } from 'react-native';
+import { Image, Platform, StyleSheet, View, ScrollView, TouchableOpacity, Text, useWindowDimensions } from 'react-native';
 import { vehicles } from '../../data/vehicleData';
 
 const CARD_MARGIN = -30;
@@ -10,10 +10,17 @@ interface HeroImageProps {
 
 export function HeroImage({ onVehiclePress }: HeroImageProps) {
   const { width } = useWindowDimensions();
+  const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const viewportWidth = Math.min(width, 1200);
-  const cardWidth = Math.min(viewportWidth * 0.55, 520);
-  const slideInterval = cardWidth + CARD_MARGIN * 2;
-  const horizontalPadding = (viewportWidth - cardWidth) / 2 - CARD_MARGIN;
+  const cardMargin = isMobileWeb ? 8 : CARD_MARGIN;
+  const cardWidth = isMobileWeb
+    ? Math.max(viewportWidth - 24, 280)
+    : Math.min(viewportWidth * 0.55, 520);
+  const slideInterval = cardWidth + cardMargin * 2;
+  const horizontalPadding = Math.max(
+    (viewportWidth - cardWidth) / 2 - cardMargin,
+    0
+  );
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -60,7 +67,7 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.container}>
+      <View style={[styles.container, isMobileWeb && styles.containerMobile]}>
         <ScrollView
           ref={scrollViewRef}
           horizontal
@@ -98,7 +105,8 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
                 onPress={() => onVehiclePress?.(String(vehicle.id))}
                 style={[
                   styles.card,
-                  { width: cardWidth },
+                  { width: cardWidth, marginHorizontal: cardMargin },
+                  isMobileWeb && styles.cardMobile,
                   isActive ? styles.activeCard : styles.inactiveCard,
                   {
                     transform: [
@@ -110,7 +118,7 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
                 ]}
               >
                 {/* Contenedor e Imagen del vehículo (ajustado para ver el carro completo) */}
-                <View style={styles.imageContainer}>
+                <View style={[styles.imageContainer, isMobileWeb && styles.imageContainerMobile]}>
                   <Image
                     source={typeof imageSource === 'string' ? { uri: imageSource } : imageSource}
                     style={styles.imageBackdrop}
@@ -127,13 +135,13 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
                 </View>
 
                 {/* Banner inferior en blanco */}
-                <View style={styles.infoBanner}>
-                  <Text style={styles.vehicleTitle} numberOfLines={1}>
+                <View style={[styles.infoBanner, isMobileWeb && styles.infoBannerMobile]}>
+                  <Text style={[styles.vehicleTitle, isMobileWeb && styles.vehicleTitleMobile]} numberOfLines={1}>
                     {vehicle.title || vehicle.name || 'Vehículo'}
                   </Text>
                   
-                  <View style={styles.detailsRow}>
-                    <View style={styles.specsGroup}>
+                  <View style={[styles.detailsRow, isMobileWeb && styles.detailsRowMobile]}>
+                    <View style={[styles.specsGroup, isMobileWeb && styles.specsGroupMobile]}>
                       <Text style={styles.specText}> {vehicle.fuel || vehicle.fuelType || 'Gasolina'}</Text>
                       <Text style={styles.specText}> {vehicle.transmission || 'Automática'}</Text>
                       <Text style={styles.specText}> {vehicle.year || '2022'}</Text>
@@ -151,10 +159,10 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
         </ScrollView>
 
         {/* Botones de navegación */}
-        <TouchableOpacity style={[styles.arrowButton, styles.leftArrow]} onPress={handlePrev}>
+        <TouchableOpacity style={[styles.arrowButton, styles.leftArrow, isMobileWeb && styles.leftArrowMobile]} onPress={handlePrev}>
           <Text style={styles.arrowText}>‹</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.arrowButton, styles.rightArrow]} onPress={handleNext}>
+        <TouchableOpacity style={[styles.arrowButton, styles.rightArrow, isMobileWeb && styles.rightArrowMobile]} onPress={handleNext}>
           <Text style={styles.arrowText}>›</Text>
         </TouchableOpacity>
 
@@ -188,12 +196,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     justifyContent: 'center',
   },
+  containerMobile: {
+    height: 340,
+  },
   scrollContent: {
     alignItems: 'center',
   },
   card: {
     height: 380,
-    marginHorizontal: CARD_MARGIN,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#ffffff', // Fondo de la tarjeta en blanco
@@ -204,6 +214,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+  },
+  cardMobile: {
+    height: 340,
   },
   activeCard: {
     zIndex: 10,
@@ -218,6 +231,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: '#e5e7eb',
+  },
+  imageContainerMobile: {
+    height: 205,
   },
   imageBackdrop: {
     position: 'absolute',
@@ -252,6 +268,10 @@ const styles = StyleSheet.create({
     height: 100,
     justifyContent: 'space-between',
   },
+  infoBannerMobile: {
+    height: 110,
+    padding: 10,
+  },
   vehicleTitle: {
     color: '#111827', // Texto del título en oscuro para contrastar con blanco
     fontSize: 18,
@@ -259,14 +279,26 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  vehicleTitleMobile: {
+    fontSize: 16,
+  },
   detailsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  detailsRowMobile: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
   specsGroup: {
     flexDirection: 'row',
     gap: 10,
+  },
+  specsGroupMobile: {
+    flex: 1,
+    flexWrap: 'wrap',
+    gap: 5,
   },
   specText: {
     color: '#4b5563', // Texto secundario en gris oscuro
@@ -297,8 +329,14 @@ const styles = StyleSheet.create({
   leftArrow: {
     left: 15,
   },
+  leftArrowMobile: {
+    left: 8,
+  },
   rightArrow: {
     right: 15,
+  },
+  rightArrowMobile: {
+    right: 8,
   },
   arrowText: {
     color: '#fff',

@@ -1,5 +1,13 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  useWindowDimensions,
+} from 'react-native';
 
 export interface Vehicle {
   id: string;
@@ -19,8 +27,15 @@ interface VehicleCardProps {
 }
 
 export function VehicleCard({ vehicle, onPress }: VehicleCardProps) {
+  const { width } = useWindowDimensions();
+  const isMobileWeb = Platform.OS === 'web' && width <= 600;
+
   return (
-    <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={onPress}>
+    <TouchableOpacity
+      style={[styles.card, isMobileWeb && styles.cardMobile]}
+      activeOpacity={0.9}
+      onPress={onPress}
+    >
       {/* Imagen del vehículo */}
       <View style={styles.imageContainer}>
         <Image
@@ -73,6 +88,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     width: 320, // Ancho fijo por tarjeta dentro del grid
     marginHorizontal: 10,
+  },
+  cardMobile: {
+    width: '100%',
+    maxWidth: 360,
+    marginHorizontal: 0,
   },
   imageContainer: {
     width: '100%',

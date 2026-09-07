@@ -5,6 +5,8 @@ import {
   View,
   ScrollView,
   ActivityIndicator,
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { NavBar } from './components/navigation/NavBar';
@@ -59,6 +61,8 @@ function mapApiVehicle(vehicle: ApiVehicle): Vehicle {
 }
 
 export default function App() {
+  const { width } = useWindowDimensions();
+  const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const pageScrollRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState<
     'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used'
@@ -269,7 +273,7 @@ export default function App() {
           onBack={returnToCatalog}
         />
       ) : currentPage === 'results' || currentPage === 'new' || currentPage === 'used' ? (
-        <View style={styles.content}>
+        <View style={[styles.content, isMobileWeb && styles.contentMobile]}>
           <ScrollReveal style={styles.revealSection}>
             <Text style={styles.title}>{currentPage === 'new' ? 'Vehículos Nuevos' : currentPage === 'used' ? 'Vehículos Usados' : 'Resultados de búsqueda'}</Text>
             {!!searchMessage && <Text style={styles.resultsText}>{searchMessage}</Text>}
@@ -285,7 +289,11 @@ export default function App() {
             <>
               <View style={styles.catalogContainer}>
                 {catalogVehicles.map((vehicle, index) => (
-                  <ScrollReveal key={vehicle.id} delay={(index % 3) * 70}>
+                  <ScrollReveal
+                    key={vehicle.id}
+                    delay={(index % 3) * 70}
+                    style={isMobileWeb ? styles.catalogItemMobile : undefined}
+                  >
                     <VehicleCard vehicle={vehicle} onPress={() => openVehicleDetails(vehicle.id)} />
                   </ScrollReveal>
                 ))}
@@ -302,7 +310,7 @@ export default function App() {
         <>
           <ScrollReveal style={styles.revealSection}>
             <View style={styles.heroSection}>
-              <View style={styles.filterWrapper}>
+              <View style={[styles.filterWrapper, isMobileWeb && styles.filterWrapperMobile]}>
                 <FilterPanel onSearch={handleSearch} />
               </View>
             </View>
@@ -313,7 +321,7 @@ export default function App() {
           </ScrollReveal>
 
           <ScrollReveal style={styles.revealSection} delay={60}>
-            <View style={styles.content}>
+            <View style={[styles.content, isMobileWeb && styles.contentMobile]}>
               <Text style={styles.title}>Vehículos recién agregados</Text>
 
               {isSearching ? (
@@ -329,7 +337,11 @@ export default function App() {
 
                   <View style={styles.catalogContainer}>
                     {catalogVehicles.map((vehicle, index) => (
-                      <ScrollReveal key={vehicle.id} delay={(index % 3) * 70}>
+                      <ScrollReveal
+                        key={vehicle.id}
+                        delay={(index % 3) * 70}
+                        style={isMobileWeb ? styles.catalogItemMobile : undefined}
+                      >
                         <VehicleCard
                           vehicle={vehicle}
                           onPress={() => openVehicleDetails(vehicle.id)}
@@ -387,9 +399,16 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 1100,
   },
+  filterWrapperMobile: {
+    width: '94%',
+  },
   content: {
     padding: 24,
     alignItems: 'center',
+  },
+  contentMobile: {
+    paddingHorizontal: 12,
+    paddingVertical: 18,
   },
   title: {
     fontSize: 22,
@@ -413,6 +432,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     maxWidth: 1200,
+  },
+  catalogItemMobile: {
+    width: '100%',
+    alignItems: 'center',
   },
   statusContainer: {
     alignItems: 'center',

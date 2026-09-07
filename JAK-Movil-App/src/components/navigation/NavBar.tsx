@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   Linking,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 
@@ -34,6 +35,7 @@ export function NavBar({
 }: NavBarProps) {
   const { width } = useWindowDimensions();
   const isCompact = width < 900;
+  const isMobileWeb = Platform.OS === 'web' && width <= 600;
 
   function openSocialNetwork(url: string) {
     Linking.openURL(url).catch((error) =>
@@ -115,35 +117,35 @@ export function NavBar({
         <View style={styles.menuContainer}>
           
           <TouchableOpacity
-            style={[styles.navItem, activePage === 'home' && styles.activeNavItem]}
+            style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'home' && styles.activeNavItem]}
             onPress={onHomePress}
           >
             <Text style={styles.navText}>INICIO</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.navItem, activePage === 'new' && styles.activeNavItem]}
+            style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'new' && styles.activeNavItem]}
             onPress={onNewVehiclesPress}
           >
             <Text style={styles.navText}>VEHÍCULOS NUEVOS</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.navItem, activePage === 'used' && styles.activeNavItem]}
+            style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'used' && styles.activeNavItem]}
             onPress={onUsedVehiclesPress}
           >
             <Text style={styles.navText}>VEHÍCULOS USADOS</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.navItem, activePage === 'about' && styles.activeNavItem]}
+            style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'about' && styles.activeNavItem]}
             onPress={onAboutPress}
           >
             <Text style={styles.navText}>NOSOTROS</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.navItem, activePage === 'contact' && styles.activeNavItem]}
+            style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'contact' && styles.activeNavItem]}
             onPress={onContactPress}
           >
             <Text style={styles.navText}>CONTACTO</Text>
@@ -319,6 +321,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  navItemMobile: {
+    width: '50%',
+    paddingHorizontal: 6,
+    paddingVertical: 12,
   },
   activeNavItem: {
     backgroundColor: '#dc2626',

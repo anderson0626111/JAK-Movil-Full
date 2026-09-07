@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { API_URL } from '../../config/api';
 import { ScrollReveal } from '../animation/ScrollReveal';
@@ -47,6 +49,8 @@ function FeatureList({ title, value }: { title: string; value?: string | null })
 }
 
 export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
+  const { width } = useWindowDimensions();
+  const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const [vehicle, setVehicle] = useState<ApiVehicle | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState('');
   const [loading, setLoading] = useState(true);
@@ -92,18 +96,18 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
   if (error || !vehicle) return <View style={styles.statusContainer}><Text style={styles.errorText}>{error}</Text><TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>VOLVER A RESULTADOS</Text></TouchableOpacity></View>;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isMobileWeb && styles.containerMobile]}>
       <ScrollReveal>
         <TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>← VOLVER</Text></TouchableOpacity>
         <View style={styles.headingRow}>
-          <View><Text style={styles.title}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{vehicle.año} · {vehicle.condicion || vehicle.tipo}</Text></View>
-          <Text style={styles.price}>{formatPrice(vehicle.precio, vehicle.moneda)}</Text>
+          <View><Text style={[styles.title, isMobileWeb && styles.titleMobile]}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{vehicle.año} · {vehicle.condicion || vehicle.tipo}</Text></View>
+          <Text style={[styles.price, isMobileWeb && styles.priceMobile]}>{formatPrice(vehicle.precio, vehicle.moneda)}</Text>
         </View>
       </ScrollReveal>
 
       <ScrollReveal delay={60}>
-        <View style={styles.galleryCard}>
-          <View style={styles.mainImageContainer}>
+        <View style={[styles.galleryCard, isMobileWeb && styles.galleryCardMobile]}>
+          <View style={[styles.mainImageContainer, isMobileWeb && styles.mainImageContainerMobile]}>
             {selectedPhoto ? (
               <>
                 <Image source={{ uri: selectedPhoto }} style={styles.imageBackdrop} resizeMode="cover" blurRadius={18} />
@@ -141,7 +145,7 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
             ) : <View style={styles.imageFallback}><Text style={styles.fallbackText}>No hay fotografías disponibles</Text></View>}
           </View>
           {vehicle.fotos.length > 1 && <View style={styles.thumbnailRow}>{vehicle.fotos.map((photo, index) => (
-            <TouchableOpacity key={photo} activeOpacity={0.8} onPress={() => setSelectedPhoto(photo)} style={[styles.thumbnailButton, selectedPhoto === photo && styles.thumbnailSelected]}>
+            <TouchableOpacity key={photo} activeOpacity={0.8} onPress={() => setSelectedPhoto(photo)} style={[styles.thumbnailButton, isMobileWeb && styles.thumbnailButtonMobile, selectedPhoto === photo && styles.thumbnailSelected]}>
               <Image source={{ uri: photo }} style={styles.thumbnail} resizeMode="cover" /><Text style={styles.photoNumber}>{index + 1}</Text>
             </TouchableOpacity>
           ))}</View>}
@@ -185,7 +189,7 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.lightboxStage}>
+          <View style={[styles.lightboxStage, isMobileWeb && styles.lightboxStageMobile]}>
             <Image source={{ uri: selectedPhoto }} style={styles.lightboxImage} resizeMode="contain" />
           </View>
 
@@ -193,14 +197,14 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
             <>
               <TouchableOpacity
                 accessibilityLabel="Fotografía anterior"
-                style={[styles.lightboxArrow, styles.lightboxArrowLeft]}
+                style={[styles.lightboxArrow, styles.lightboxArrowLeft, isMobileWeb && styles.lightboxArrowMobile]}
                 onPress={showPreviousPhoto}
               >
                 <Text style={styles.lightboxArrowText}>‹</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 accessibilityLabel="Fotografía siguiente"
-                style={[styles.lightboxArrow, styles.lightboxArrowRight]}
+                style={[styles.lightboxArrow, styles.lightboxArrowRight, isMobileWeb && styles.lightboxArrowMobile]}
                 onPress={showNextPhoto}
               >
                 <Text style={styles.lightboxArrowText}>›</Text>
@@ -236,15 +240,20 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
 
 const styles = StyleSheet.create({
   container: { width: '92%', maxWidth: 1120, alignSelf: 'center', paddingVertical: 28 },
+  containerMobile: { width: '94%', paddingVertical: 18 },
   statusContainer: { alignItems: 'center', paddingVertical: 80 }, statusText: { color: '#4b5563', marginTop: 12 },
   errorText: { color: '#dc2626', fontSize: 16, marginBottom: 18 },
   backButton: { alignSelf: 'flex-start', backgroundColor: '#262626', borderRadius: 6, paddingHorizontal: 16, paddingVertical: 11, marginBottom: 22 },
   backButtonText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   headingRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, marginBottom: 22 },
   title: { color: '#111827', fontSize: 28, fontWeight: 'bold' }, subtitle: { color: '#6b7280', fontSize: 15, marginTop: 5 },
+  titleMobile: { fontSize: 23 },
   price: { color: '#dc2626', fontSize: 24, fontWeight: 'bold' },
+  priceMobile: { fontSize: 21 },
   galleryCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 22, elevation: 2 },
+  galleryCardMobile: { padding: 8 },
   mainImageContainer: { width: '100%', maxWidth: 720, height: 320, borderRadius: 10, overflow: 'hidden', backgroundColor: '#f3f4f6' },
+  mainImageContainerMobile: { height: 240 },
   imageBackdrop: { position: 'absolute', width: '100%', height: '100%', opacity: 0.45 },
   imageBackdropOverlay: { position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(255,255,255,0.35)' },
   mainImageTapArea: { width: '100%', height: '100%', zIndex: 1 },
@@ -256,6 +265,7 @@ const styles = StyleSheet.create({
   galleryArrowLeft: { left: 14 }, galleryArrowRight: { right: 14 }, galleryArrowText: { color: '#fff', fontSize: 34, fontWeight: 'bold', lineHeight: 38, marginTop: -3 },
   thumbnailRow: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 14 },
   thumbnailButton: { width: 128, height: 82, borderRadius: 7, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent', position: 'relative' },
+  thumbnailButtonMobile: { width: 96, height: 64 },
   thumbnailSelected: { borderColor: '#dc2626' }, thumbnail: { width: '100%', height: '100%' },
   photoNumber: { position: 'absolute', right: 5, bottom: 4, color: '#fff', backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, fontSize: 10, fontWeight: 'bold' },
   detailsCard: { backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 22, elevation: 2 },
@@ -271,8 +281,10 @@ const styles = StyleSheet.create({
   lightboxClose: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
   lightboxCloseText: { color: '#fff', fontSize: 32, lineHeight: 34, marginTop: -3 },
   lightboxStage: { width: '84%', height: '72%', maxWidth: 1120, alignItems: 'center', justifyContent: 'center' },
+  lightboxStageMobile: { width: '100%', height: '64%' },
   lightboxImage: { width: '100%', height: '100%' },
   lightboxArrow: { position: 'absolute', top: '46%', width: 58, height: 64, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+  lightboxArrowMobile: { width: 42, height: 54 },
   lightboxArrowLeft: { left: 20, borderTopRightRadius: 8, borderBottomRightRadius: 8 },
   lightboxArrowRight: { right: 20, borderTopLeftRadius: 8, borderBottomLeftRadius: 8 },
   lightboxArrowText: { color: '#fff', fontSize: 43, fontWeight: 'bold', lineHeight: 48, marginTop: -5 },
