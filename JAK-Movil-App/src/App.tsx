@@ -77,6 +77,8 @@ export default function App() {
   >('home');
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
+  const [language, setLanguage] = useState<'ES' | 'EN'>('ES');
+  const isEnglish = language === 'EN';
 
   function scrollToTop() {
     requestAnimationFrame(() => {
@@ -136,6 +138,9 @@ export default function App() {
       if (filters.modelo) query.append('modelo', filters.modelo);
       if (filters.anioDesde) query.append('anioDesde', filters.anioDesde);
       if (filters.anioHasta) query.append('anioHasta', filters.anioHasta);
+      if (filters.precioDesde) query.append('precioDesde', filters.precioDesde);
+      if (filters.precioHasta) query.append('precioHasta', filters.precioHasta);
+      if (filters.moneda) query.append('moneda', filters.moneda);
 
       const url = `${API_URL}/api/vehiculos${
         query.toString() ? `?${query}` : ''
@@ -256,6 +261,8 @@ export default function App() {
       <StatusBar style="light" />
 
       <NavBar
+        language={language}
+        onLanguageChange={setLanguage}
         activePage={activeNavigationPage}
         onHomePress={() => {
           navigateTo('home');
@@ -274,15 +281,18 @@ export default function App() {
         />
       ) : currentPage === 'results' || currentPage === 'new' || currentPage === 'used' ? (
         <View style={[styles.content, isMobileWeb && styles.contentMobile]}>
+          <View style={styles.filterWrapper}>
+            <FilterPanel onSearch={handleSearch} language={language} />
+          </View>
           <ScrollReveal style={styles.revealSection}>
-            <Text style={styles.title}>{currentPage === 'new' ? 'Vehículos Nuevos' : currentPage === 'used' ? 'Vehículos Usados' : 'Resultados de búsqueda'}</Text>
+            <Text style={styles.title}>{currentPage === 'new' ? (isEnglish ? 'New Vehicles' : 'Vehículos Nuevos') : currentPage === 'used' ? (isEnglish ? 'Used Vehicles' : 'Vehículos Usados') : (isEnglish ? 'Search results' : 'Resultados de búsqueda')}</Text>
             {!!searchMessage && <Text style={styles.resultsText}>{searchMessage}</Text>}
           </ScrollReveal>
           {isSearching ? (
             <ScrollReveal>
               <View style={styles.statusContainer}>
                 <ActivityIndicator size="large" color="#dc2626" />
-                <Text style={styles.statusText}>Buscando vehículos...</Text>
+                <Text style={styles.statusText}>{isEnglish ? 'Searching vehicles...' : 'Buscando vehículos...'}</Text>
               </View>
             </ScrollReveal>
           ) : (
@@ -298,7 +308,7 @@ export default function App() {
                   </ScrollReveal>
                 ))}
               </View>
-              {catalogVehicles.length === 0 && <Text style={styles.emptyText}>No encontramos vehículos con esos filtros.</Text>}
+              {catalogVehicles.length === 0 && <Text style={styles.emptyText}>{isEnglish ? 'No vehicles match these filters.' : 'No encontramos vehículos con esos filtros.'}</Text>}
             </>
           )}
         </View>
@@ -311,7 +321,7 @@ export default function App() {
           <ScrollReveal style={styles.revealSection}>
             <View style={styles.heroSection}>
               <View style={[styles.filterWrapper, isMobileWeb && styles.filterWrapperMobile]}>
-                <FilterPanel onSearch={handleSearch} />
+                <FilterPanel onSearch={handleSearch} language={language} />
               </View>
             </View>
           </ScrollReveal>
@@ -322,7 +332,7 @@ export default function App() {
 
           <ScrollReveal style={styles.revealSection} delay={60}>
             <View style={[styles.content, isMobileWeb && styles.contentMobile]}>
-              <Text style={styles.title}>Vehículos recién agregados</Text>
+              <Text style={styles.title}>{isEnglish ? 'Recently added vehicles' : 'Vehículos recién agregados'}</Text>
 
               {isSearching ? (
                 <View style={styles.statusContainer}>
@@ -376,6 +386,7 @@ export default function App() {
             loadAllVehicles();
           }}
           onAboutPress={() => navigateTo('about')}
+          language={language}
         />
       </ScrollReveal>
     </ScrollView>

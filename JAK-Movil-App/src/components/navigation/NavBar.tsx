@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   Image,
   Linking,
   Platform,
@@ -23,6 +24,8 @@ interface NavBarProps {
   onAboutPress?: () => void;
   onContactPress?: () => void;
   activePage?: 'home' | 'about' | 'contact' | 'new' | 'used' | string;
+  language: 'ES' | 'EN';
+  onLanguageChange: (language: 'ES' | 'EN') => void;
 }
 
 export function NavBar({
@@ -32,10 +35,13 @@ export function NavBar({
   onAboutPress,
   onContactPress,
   activePage = 'home',
+  language,
+  onLanguageChange,
 }: NavBarProps) {
   const { width } = useWindowDimensions();
   const isCompact = width < 900;
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
+  const [hoveredLanguage, setHoveredLanguage] = useState<'ES' | 'EN' | null>(null);
 
   function openSocialNetwork(url: string) {
     Linking.openURL(url).catch((error) =>
@@ -57,10 +63,10 @@ export function NavBar({
 
         {!isCompact && (
           <View style={styles.trustSection}>
-            <Text style={styles.eyebrow}>TU PRÓXIMO VEHÍCULO</Text>
-            <Text style={styles.trustTitle}>Compra con confianza</Text>
+            <Text style={styles.eyebrow}>{language === 'ES' ? 'TU PRÓXIMO VEHÍCULO' : 'YOUR NEXT VEHICLE'}</Text>
+            <Text style={styles.trustTitle}>{language === 'ES' ? 'Compra con confianza' : 'Buy with confidence'}</Text>
             <Text style={styles.trustText}>
-              Nuevos y usados · Punta Cana, RD
+              {language === 'ES' ? 'Nuevos y usados · Punta Cana, RD' : 'New and used · Punta Cana, DR'}
             </Text>
           </View>
         )}
@@ -79,7 +85,7 @@ export function NavBar({
             isCompact && styles.socialSectionCompact,
           ]}
         >
-          <Text style={styles.socialLabel}>SÍGUENOS</Text>
+          <Text style={styles.socialLabel}>{language === 'ES' ? 'SÍGUENOS' : 'FOLLOW US'}</Text>
           <View style={styles.socialRow}>
             <TouchableOpacity
               accessibilityRole="link"
@@ -109,6 +115,26 @@ export function NavBar({
               <Text style={[styles.socialLetter, styles.xLetter]}>X</Text>
             </TouchableOpacity>
           </View>
+          <View style={styles.languageSwitcher}>
+            <Text style={styles.languageGlobe}>🌐</Text>
+            <Pressable
+              style={[styles.languageButton, language === 'ES' && hoveredLanguage === 'ES' && styles.languageHover]}
+              onPress={() => onLanguageChange('ES')}
+              onHoverIn={() => setHoveredLanguage('ES')}
+              onHoverOut={() => setHoveredLanguage(null)}
+            >
+              <Text style={[styles.languageOption, styles.languageEs, language === 'ES' && styles.languageActive, language === 'ES' && hoveredLanguage === 'ES' && styles.languageHoverText]}>ES</Text>
+            </Pressable>
+            <Text style={styles.languageDivider}>|</Text>
+            <Pressable
+              style={[styles.languageButton, language === 'EN' && hoveredLanguage === 'EN' && styles.languageHover]}
+              onPress={() => onLanguageChange('EN')}
+              onHoverIn={() => setHoveredLanguage('EN')}
+              onHoverOut={() => setHoveredLanguage(null)}
+            >
+              <Text style={[styles.languageOption, styles.languageEn, language === 'EN' && styles.languageActive, language === 'EN' && hoveredLanguage === 'EN' && styles.languageHoverText]}>EN</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
 
@@ -120,35 +146,35 @@ export function NavBar({
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'home' && styles.activeNavItem]}
             onPress={onHomePress}
           >
-            <Text style={styles.navText}>INICIO</Text>
+            <Text style={styles.navText}>{language === 'ES' ? 'INICIO' : 'HOME'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'new' && styles.activeNavItem]}
             onPress={onNewVehiclesPress}
           >
-            <Text style={styles.navText}>VEHÍCULOS NUEVOS</Text>
+            <Text style={styles.navText}>{language === 'ES' ? 'VEHÍCULOS NUEVOS' : 'NEW VEHICLES'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'used' && styles.activeNavItem]}
             onPress={onUsedVehiclesPress}
           >
-            <Text style={styles.navText}>VEHÍCULOS USADOS</Text>
+            <Text style={styles.navText}>{language === 'ES' ? 'VEHÍCULOS USADOS' : 'USED VEHICLES'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'about' && styles.activeNavItem]}
             onPress={onAboutPress}
           >
-            <Text style={styles.navText}>NOSOTROS</Text>
+            <Text style={styles.navText}>{language === 'ES' ? 'NOSOTROS' : 'ABOUT US'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'contact' && styles.activeNavItem]}
             onPress={onContactPress}
           >
-            <Text style={styles.navText}>CONTACTO</Text>
+            <Text style={styles.navText}>{language === 'ES' ? 'CONTACTO' : 'CONTACT'}</Text>
           </TouchableOpacity>
 
         </View>
@@ -230,7 +256,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 36,
     width: 270,
-    alignItems: 'flex-end',
+    alignItems: 'center',
     zIndex: 2,
   },
   socialSectionCompact: {
@@ -335,5 +361,44 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+  languageSwitcher: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    marginTop: 8,
+    gap: 5,
+  },
+  languageGlobe: {
+    fontSize: 14,
+  },
+  languageOption: {
+    fontSize: 15,
+    fontWeight: '800',
+    paddingHorizontal: 3,
+  },
+  languageButton: {
+    borderRadius: 4,
+    paddingHorizontal: 2,
+  },
+  languageHover: {
+    backgroundColor: '#ffffff',
+  },
+  languageHoverText: {
+    color: '#111827',
+  },
+  languageEs: {
+    color: '#f87171',
+  },
+  languageEn: {
+    color: '#60a5fa',
+  },
+  languageActive: {
+    fontWeight: '900',
+  },
+  languageDivider: {
+    color: '#6b7280',
+    fontSize: 13,
   },
 });

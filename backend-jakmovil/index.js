@@ -103,6 +103,29 @@ function validarAnio(valor) {
   return anio;
 }
 
+function validarPrecio(valor) {
+  if (valor === undefined || valor === '') {
+    return null;
+  }
+
+  const texto = String(valor).trim().toUpperCase();
+  const moneda = /(?:RD\$|DOP)/.test(texto)
+    ? 'DOP'
+    : /(?:US\$|USD)/.test(texto)
+      ? 'USD'
+      : null;
+  const precioTexto = texto
+    .replace(/,/g, '')
+    .replace(/[^0-9.]/g, '');
+  const precio = Number(precioTexto);
+
+  if (!Number.isFinite(precio) || precio < 0) {
+    return undefined;
+  }
+
+  return { precio, moneda };
+}
+
 // Marcas y modelos para los selectores del filtro.
 app.get('/api/vehiculos/filtros', async (req, res) => {
   try {
@@ -146,18 +169,30 @@ app.get('/api/vehiculos/filtros', async (req, res) => {
 // Búsqueda de vehículos.
 app.get('/api/vehiculos', async (req, res) => {
   try {
-    const { marca, modelo, anioDesde, anioHasta, condicion } = req.query;
+    const { marca, modelo, anioDesde, anioHasta, condicion, precioDesde, precioHasta, moneda } = req.query;
 
     const desde = validarAnio(anioDesde);
     const hasta = validarAnio(anioHasta);
+    const precioMinimo = validarPrecio(precioDesde);
+    const precioMaximo = validarPrecio(precioHasta);
+    const monedaSeleccionada = moneda === 'USD' || moneda === 'DOP' ? moneda : null;
 
     if (
       desde === undefined ||
       hasta === undefined ||
-      (desde && hasta && desde > hasta)
+      precioMinimo === undefined ||
+      precioMaximo === undefined ||
+      (desde && hasta && desde > hasta) ||
+      (precioMinimo !== null &&
+        precioMaximo !== null &&
+        precioMinimo.precio > precioMaximo.precio) ||
+      (!monedaSeleccionada &&
+        precioMinimo?.moneda &&
+        precioMaximo?.moneda &&
+        precioMinimo.moneda !== precioMaximo.moneda)
     ) {
       return res.status(400).json({
-        error: 'El rango de años no es válido',
+        error: 'El rango de años o precios no es válido',
       });
     }
 
@@ -182,6 +217,25 @@ app.get('/api/vehiculos', async (req, res) => {
     if (hasta) {
       sql += ' AND `año` <= ?';
       parametros.push(hasta);
+    }
+
+    const monedaPrecio = monedaSeleccionada || precioMinimo?.moneda || precioMaximo?.moneda;
+    if (monedaPrecio) {
+      sql += ' AND moneda = ?';
+      parametros.push(monedaPrecio);
+    }
+
+    if (precioMinimo !== null && precioMaximo === null) {
+      sql += ' AND precio = ?';
+      parametros.push(precioMinimo.precio);
+    } else if (precioMinimo !== null) {
+      sql += ' AND precio >= ?';
+      parametros.push(precioMinimo.precio);
+    }
+
+    if (precioMaximo !== null) {
+      sql += ' AND precio <= ?';
+      parametros.push(precioMaximo.precio);
     }
 
     if (condicion) {

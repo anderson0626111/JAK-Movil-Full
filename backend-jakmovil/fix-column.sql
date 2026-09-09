@@ -1,1 +1,1 @@
-ALTER TABLE vehiculos CHANGE `año` `anio` INT(11) NOT NULL;
+ALTER TABLE vehiculos CHANGE `anio` `año` INT(11) NOT NULL;

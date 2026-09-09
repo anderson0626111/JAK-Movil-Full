@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
+  TextInput,
   useWindowDimensions,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
@@ -16,10 +17,14 @@ export interface SearchFilters {
   modelo: string;
   anioDesde: string;
   anioHasta: string;
+  precioDesde: string;
+  precioHasta: string;
+  moneda: string;
 }
 
 interface FilterPanelProps {
   onSearch: (filters: SearchFilters) => void;
+  language?: 'ES' | 'EN';
 }
 
 const currentYear = new Date().getFullYear();
@@ -28,16 +33,21 @@ const defaultYears = Array.from(
   (_, index) => currentYear + 1 - index
 );
 
-export function FilterPanel({ onSearch }: FilterPanelProps) {
+export function FilterPanel({ onSearch, language = 'ES' }: FilterPanelProps) {
   const { width } = useWindowDimensions();
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
   const [yearFrom, setYearFrom] = useState('');
   const [yearTo, setYearTo] = useState('');
+  const [priceFrom, setPriceFrom] = useState('');
+  const [priceTo, setPriceTo] = useState('');
+  const [currency, setCurrency] = useState('');
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const pricePlaceholder = currency === 'USD' ? 'US$' : currency === 'DOP' ? 'RD$' : 'US$ / RD$';
+  const isEnglish = language === 'EN';
 
   async function loadFilters(selectedBrand = '') {
     try {
@@ -82,25 +92,28 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
       modelo: model,
       anioDesde: yearFrom,
       anioHasta: yearTo,
+      precioDesde: priceFrom,
+      precioHasta: priceTo,
+      moneda: currency,
     });
   }
 
   return (
     <View style={[styles.container, isMobileWeb && styles.containerMobile]}>
       <Text style={[styles.headerTitle, isMobileWeb && styles.headerTitleMobile]}>
-        Encuentra tu Vehículo
+        {isEnglish ? 'Find your vehicle' : 'Encuentra tu Vehículo'}
       </Text>
 
       <View style={styles.filterRow}>
         <View style={[styles.inputGroup, isMobileWeb && styles.inputGroupMobile]}>
-          <Text style={styles.label}>MARCA</Text>
+            <Text style={styles.label}>{isEnglish ? 'BRAND' : 'MARCA'}</Text>
           <View style={styles.pickerContainer}>
             <Picker
               selectedValue={brand}
               onValueChange={handleBrandChange}
               style={styles.picker}
             >
-              <Picker.Item label="Todas las marcas" value="" />
+              <Picker.Item label={isEnglish ? 'All brands' : 'Todas las marcas'} value="" />
               {brands.map((item) => (
                 <Picker.Item key={item} label={item} value={item} />
               ))}
@@ -109,7 +122,7 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
         </View>
 
         <View style={[styles.inputGroup, isMobileWeb && styles.inputGroupMobile]}>
-          <Text style={styles.label}>MODELO</Text>
+            <Text style={styles.label}>{isEnglish ? 'MODEL' : 'MODELO'}</Text>
           <View style={styles.pickerContainer}>
             <Picker
               selectedValue={model}
@@ -117,7 +130,7 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
               style={styles.picker}
               enabled={!loading}
             >
-              <Picker.Item label="Todos los modelos" value="" />
+              <Picker.Item label={isEnglish ? 'All models' : 'Todos los modelos'} value="" />
               {models.map((item) => (
                 <Picker.Item key={item} label={item} value={item} />
               ))}
@@ -125,42 +138,87 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
           </View>
         </View>
 
-        <View style={[styles.inputGroup, isMobileWeb && styles.inputGroupMobile]}>
-          <Text style={styles.label}>AÑO DESDE</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={yearFrom}
-              onValueChange={(value) => setYearFrom(value)}
-              style={styles.picker}
-            >
-              <Picker.Item label="Cualquier año" value="" />
-              {defaultYears.map((year) => (
-                <Picker.Item
-                  key={`from-${year}`}
-                  label={year.toString()}
-                  value={year.toString()}
-                />
-              ))}
-            </Picker>
+        <View style={[styles.yearGroup, isMobileWeb && styles.yearGroupMobile]}>
+          <View style={styles.yearInputGroup}>
+            <Text style={styles.label}>{isEnglish ? 'YEAR FROM' : 'AÑO DESDE'}</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={yearFrom}
+                onValueChange={(value) => setYearFrom(value)}
+                style={styles.picker}
+              >
+                <Picker.Item label={isEnglish ? 'Any year' : 'Cualquier año'} value="" />
+                {defaultYears.map((year) => (
+                  <Picker.Item
+                    key={`from-${year}`}
+                    label={year.toString()}
+                    value={year.toString()}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+
+          <View style={styles.yearInputGroup}>
+            <Text style={styles.label}>{isEnglish ? 'YEAR TO' : 'AÑO HASTA'}</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={yearTo}
+                onValueChange={(value) => setYearTo(value)}
+                style={styles.picker}
+              >
+                <Picker.Item label={isEnglish ? 'Any year' : 'Cualquier año'} value="" />
+                {defaultYears.map((year) => (
+                  <Picker.Item
+                    key={`to-${year}`}
+                    label={year.toString()}
+                    value={year.toString()}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        </View>
+
+        <View style={[styles.yearGroup, isMobileWeb && styles.yearGroupMobile]}>
+          <View style={styles.yearInputGroup}>
+            <Text style={styles.label}>{isEnglish ? 'PRICE FROM' : 'PRECIO DESDE'}</Text>
+            <View style={styles.pickerContainer}>
+              <TextInput
+                value={priceFrom}
+                onChangeText={setPriceFrom}
+                placeholder={pricePlaceholder}
+                keyboardType="default"
+                style={styles.textInput}
+              />
+            </View>
+          </View>
+
+          <View style={styles.yearInputGroup}>
+            <Text style={styles.label}>{isEnglish ? 'PRICE TO' : 'PRECIO HASTA'}</Text>
+            <View style={styles.pickerContainer}>
+              <TextInput
+                value={priceTo}
+                onChangeText={setPriceTo}
+                placeholder={pricePlaceholder}
+                keyboardType="default"
+                style={styles.textInput}
+              />
+            </View>
           </View>
         </View>
 
         <View style={[styles.inputGroup, isMobileWeb && styles.inputGroupMobile]}>
-          <Text style={styles.label}>AÑO HASTA</Text>
+          <Text style={styles.label}>{isEnglish ? 'CURRENCY' : 'MONEDA'}</Text>
           <View style={styles.pickerContainer}>
             <Picker
-              selectedValue={yearTo}
-              onValueChange={(value) => setYearTo(value)}
+              selectedValue={currency}
+              onValueChange={setCurrency}
               style={styles.picker}
             >
-              <Picker.Item label="Cualquier año" value="" />
-              {defaultYears.map((year) => (
-                <Picker.Item
-                  key={`to-${year}`}
-                  label={year.toString()}
-                  value={year.toString()}
-                />
-              ))}
+              <Picker.Item label={isEnglish ? 'US dollars or Dominican pesos' : 'Dólares o pesos'} value="" />
+              <Picker.Item label={isEnglish ? 'US dollars (US$)' : 'Dólares (US$)'} value="USD" />
+              <Picker.Item label={isEnglish ? 'Dominican pesos (RD$)' : 'Pesos dominicanos (RD$)'} value="DOP" />
             </Picker>
           </View>
         </View>
@@ -177,7 +235,7 @@ export function FilterPanel({ onSearch }: FilterPanelProps) {
           {loading ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.buttonText}>BUSCAR VEHÍCULOS</Text>
+            <Text style={styles.buttonText}>{isEnglish ? 'SEARCH VEHICLES' : 'BUSCAR VEHÍCULOS'}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -221,6 +279,21 @@ const styles = StyleSheet.create({
     minWidth: 0,
     width: '100%',
   },
+  yearGroup: {
+    flex: 2,
+    minWidth: 320,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  yearGroupMobile: {
+    flexBasis: '100%',
+    minWidth: 0,
+    width: '100%',
+  },
+  yearInputGroup: {
+    flex: 1,
+    minWidth: 0,
+  },
   label: {
     fontSize: 12,
     fontWeight: '600',
@@ -229,8 +302,8 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
+    borderColor: '#6b7280',
+    borderRadius: 6,
     backgroundColor: '#ffffff',
     overflow: 'hidden',
   },
@@ -238,6 +311,13 @@ const styles = StyleSheet.create({
     height: 42,
     width: '100%',
     color: '#1f2937',
+  },
+  textInput: {
+    height: 42,
+    width: '100%',
+    paddingHorizontal: 10,
+    color: '#1f2937',
+    backgroundColor: '#ffffff',
   },
   button: {
     backgroundColor: '#dc2626',

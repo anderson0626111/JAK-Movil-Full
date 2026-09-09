@@ -8,6 +8,7 @@ interface FooterProps {
   onContactPress?: () => void;
   onCatalogPress?: () => void;
   onAboutPress?: () => void;
+  language?: 'ES' | 'EN';
 }
 
 export function Footer({
@@ -17,7 +18,9 @@ export function Footer({
   onContactPress,
   onCatalogPress,
   onAboutPress,
+  language = 'ES',
 }: FooterProps) {
+  const isEnglish = language === 'EN';
   const handleOpenLink = (url: string) => {
     Linking.openURL(url).catch((err) => console.error("Error al abrir enlace: ", err));
   };
@@ -30,30 +33,30 @@ export function Footer({
         <View style={styles.brandSection}>
           <Text style={styles.brandTitle}>Rosybel Auto Sales <Text style={styles.brandAccent}></Text></Text>
           <Text style={styles.brandDescription}>
-            Tu plataforma de confianza para encontrar, comparar y comprar vehículos en la República Dominicana.
+            {isEnglish ? 'Your trusted platform to find, compare and buy vehicles in the Dominican Republic.' : 'Tu plataforma de confianza para encontrar, comparar y comprar vehículos en la República Dominicana.'}
           </Text>
         </View>
 
         {/* Sección 2: Enlaces Rápidos */}
         <View style={styles.linksSection}>
-          <Text style={styles.sectionTitle}>Navegación</Text>
+          <Text style={styles.sectionTitle}>{isEnglish ? 'Navigation' : 'Navegación'}</Text>
           <TouchableOpacity onPress={onHomePress}>
-            <Text style={styles.linkText}>Inicio</Text>
+            <Text style={styles.linkText}>{isEnglish ? 'Home' : 'Inicio'}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={onCatalogPress}>
-            <Text style={styles.linkText}>Catálogo de Vehículos</Text>
+            <Text style={styles.linkText}>{isEnglish ? 'Vehicle catalog' : 'Catálogo de Vehículos'}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={onAboutPress}>
-            <Text style={styles.linkText}>Sobre Nosotros</Text>
+            <Text style={styles.linkText}>{isEnglish ? 'About us' : 'Sobre Nosotros'}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={onContactPress}>
-            <Text style={styles.linkText}>Contacto</Text>
+            <Text style={styles.linkText}>{isEnglish ? 'Contact' : 'Contacto'}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Sección 3: Contacto & Info */}
         <View style={styles.contactSection}>
-          <Text style={styles.sectionTitle}>Contacto</Text>
+          <Text style={styles.sectionTitle}>{isEnglish ? 'Contact' : 'Contacto'}</Text>
           <Text style={styles.contactText}> C/ Almirante #14 Veron, Punta Cana, Republica Dominicana</Text>
           <Text style={styles.contactText}> +1 (809) 474-8410</Text>
           <Text style={styles.contactText}> contacto@rosybelautosales.com</Text>
@@ -67,7 +70,7 @@ export function Footer({
       {/* Copyright */}
       <View style={styles.bottomBar}>
         <Text style={styles.copyrightText}>
-           {new Date().getFullYear()} Rosybel Auto Sales. Todos los derechos reservados.
+           {new Date().getFullYear()} Rosybel Auto Sales. {isEnglish ? 'All rights reserved.' : 'Todos los derechos reservados.'}
         </Text>
       </View>
     </View>
