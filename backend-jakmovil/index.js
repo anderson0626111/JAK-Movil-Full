@@ -99,6 +99,19 @@ async function prepararUsuarios() {
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 }
 
+async function prepararSolicitudes() {
+  await db.query(`CREATE TABLE IF NOT EXISTS solicitudes_clientes (
+    id INT NOT NULL AUTO_INCREMENT,
+    nombre VARCHAR(120) NOT NULL,
+    email VARCHAR(160) NOT NULL,
+    telefono VARCHAR(50) NOT NULL,
+    vehiculo VARCHAR(180) NOT NULL,
+    mensaje TEXT NULL,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+}
+
 async function prepararInventario() {
   const columnas = await db.query(
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehiculos' AND COLUMN_NAME IN ('estado', 'vendido_en', 'publicado_en')"
@@ -143,6 +156,36 @@ app.get('/api/auth/me', requireAdmin, async (req, res) => {
   const [usuarios] = await db.query('SELECT id, nombre, email, rol FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
   if (!usuarios[0] || usuarios[0].rol !== 'admin') return res.status(401).json({ error: 'Sesion no valida' });
   res.json({ usuario: usuarios[0] });
+});
+
+app.post('/api/solicitudes-clientes', async (req, res) => {
+  try {
+    const nombre = String(req.body.nombre || '').trim();
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const telefono = String(req.body.telefono || '').trim();
+    const vehiculo = String(req.body.vehiculo || '').trim();
+    const mensaje = String(req.body.mensaje || '').trim() || null;
+    if (!nombre || !email || !telefono || !vehiculo || !/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ error: 'Completa nombre, correo, telefono y vehiculo' });
+    }
+    await db.query('INSERT INTO solicitudes_clientes (nombre, email, telefono, vehiculo, mensaje) VALUES (?, ?, ?, ?, ?)', [nombre, email, telefono, vehiculo, mensaje]);
+    res.status(201).json({ mensaje: 'Solicitud enviada correctamente.' });
+  } catch (error) {
+    console.error('Error guardando solicitud:', error);
+    res.status(500).json({ error: 'No fue posible enviar la solicitud' });
+  }
+});
+
+app.get('/api/admin/solicitudes-clientes', requireAdmin, async (req, res) => {
+  try {
+    const [solicitudes] = await db.query(
+      'SELECT id, nombre, email, telefono, vehiculo, mensaje, creado_en FROM solicitudes_clientes ORDER BY creado_en DESC, id DESC'
+    );
+    res.json(solicitudes);
+  } catch (error) {
+    console.error('Error cargando solicitudes:', error);
+    res.status(500).json({ error: 'No fue posible cargar las solicitudes de clientes' });
+  }
 });
 
 function normalizarTexto(texto) {
@@ -563,7 +606,7 @@ app.delete('/api/admin/vehiculos/:id', requireAdmin, async (req, res) => {
   }
 });
 
-Promise.all([prepararUsuarios(), prepararInventario()])
+Promise.all([prepararUsuarios(), prepararInventario(), prepararSolicitudes()])
   .then(async () => {
     app.listen(PORT, () => {
     console.log(`Servidor activo en http://localhost:${PORT}`);

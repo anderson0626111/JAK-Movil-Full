@@ -21,6 +21,7 @@ import { AboutPage } from './components/about/AboutPage';
 import { ScrollReveal } from './components/animation/ScrollReveal';
 import { API_URL } from './config/api';
 import { AdminLogin, AdminPanel, AdminUser } from './components/admin/AdminAccess';
+import { ClientPage } from './components/client/ClientPage';
 
 const ADMIN_SESSION_KEY = 'jak-admin-session';
 
@@ -68,7 +69,7 @@ export default function App() {
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const pageScrollRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState<
-    'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
+    'home' | 'about' | 'contact' | 'client' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
   >('home');
 
   const [catalogVehicles, setCatalogVehicles] = useState<Vehicle[]>([]);
@@ -92,7 +93,7 @@ export default function App() {
   }
 
   function navigateTo(
-    page: 'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
+    page: 'home' | 'about' | 'contact' | 'client' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
   ) {
     setCurrentPage(page);
     scrollToTop();
@@ -328,6 +329,7 @@ export default function App() {
         <AdminPanel
           token={adminToken}
           user={adminUser}
+          language={language}
           onLogout={logoutAdmin}
           onBack={() => {
             navigateTo('home');
@@ -335,7 +337,9 @@ export default function App() {
           }}
         />
       ) : currentPage === 'login' ? (
-        <AdminLogin onAuthenticated={completeAdminLogin} onCancel={() => navigateTo('home')} />
+        <AdminLogin language={language} onAuthenticated={completeAdminLogin} onCancel={() => navigateTo('home')} />
+      ) : currentPage === 'client' ? (
+        <ClientPage language={language} />
       ) : currentPage === 'details' && selectedVehicleId ? (
         <VehicleDetails
           vehicleId={selectedVehicleId}
