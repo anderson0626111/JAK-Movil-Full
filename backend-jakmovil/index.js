@@ -4,6 +4,7 @@ const db = require('./db');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const PDFDocument = require('pdfkit');
 
 const app = express();
 const PORT = 3001;
@@ -112,6 +113,20 @@ async function prepararSolicitudes() {
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 }
 
+async function prepararVentas() {
+  await db.query(`CREATE TABLE IF NOT EXISTS ventas_clientes (
+    id INT NOT NULL AUTO_INCREMENT,
+    vehiculo_id INT NOT NULL,
+    vehiculo VARCHAR(180) NOT NULL,
+    nombre VARCHAR(120) NOT NULL,
+    apellido VARCHAR(120) NOT NULL,
+    cedula VARCHAR(50) NOT NULL,
+    direccion VARCHAR(255) NOT NULL,
+    vendido_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+}
+
 async function prepararInventario() {
   const columnas = await db.query(
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehiculos' AND COLUMN_NAME IN ('estado', 'vendido_en', 'publicado_en')"
@@ -181,10 +196,90 @@ app.get('/api/admin/solicitudes-clientes', requireAdmin, async (req, res) => {
     const [solicitudes] = await db.query(
       'SELECT id, nombre, email, telefono, vehiculo, mensaje, creado_en FROM solicitudes_clientes ORDER BY creado_en DESC, id DESC'
     );
-    res.json(solicitudes);
+    const [ventas] = await db.query('SELECT id, vehiculo_id, vehiculo, nombre, apellido, cedula, direccion, vendido_en FROM ventas_clientes ORDER BY vendido_en DESC, id DESC');
+    res.json({ solicitudes, ventas });
   } catch (error) {
     console.error('Error cargando solicitudes:', error);
     res.status(500).json({ error: 'No fue posible cargar las solicitudes de clientes' });
+  }
+});
+
+function validarComprador(datos) {
+  const nombre = String(datos.nombre || '').trim();
+  const apellido = String(datos.apellido || '').trim();
+  const cedula = String(datos.cedula || '').trim();
+  const direccion = String(datos.direccion || '').trim();
+  return nombre && apellido && cedula && direccion ? { nombre, apellido, cedula, direccion } : null;
+}
+
+app.put('/api/admin/ventas/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const comprador = validarComprador(req.body);
+    if (!Number.isInteger(id) || id <= 0 || !comprador) return res.status(400).json({ error: 'Completa los datos del cliente' });
+    const [resultado] = await db.query('UPDATE ventas_clientes SET nombre = ?, apellido = ?, cedula = ?, direccion = ? WHERE id = ?', [comprador.nombre, comprador.apellido, comprador.cedula, comprador.direccion, id]);
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'Venta no encontrada' });
+    res.json({ mensaje: 'Datos del cliente actualizados.' });
+  } catch (error) {
+    console.error('Error actualizando cliente:', error);
+    res.status(500).json({ error: 'No fue posible actualizar el cliente' });
+  }
+});
+
+app.delete('/api/admin/ventas/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
+    const [resultado] = await db.query('DELETE FROM ventas_clientes WHERE id = ?', [id]);
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json({ mensaje: 'Cliente eliminado.' });
+  } catch (error) {
+    console.error('Error eliminando cliente:', error);
+    res.status(500).json({ error: 'No fue posible eliminar el cliente' });
+  }
+});
+
+app.get('/api/admin/ventas/:id/factura', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
+    const [ventas] = await db.query(
+      `SELECT venta.*, vehiculo.marca, vehiculo.modelo, vehiculo.${yearColumn} AS anio, vehiculo.precio, vehiculo.moneda, vehiculo.tipo, vehiculo.transmision, vehiculo.combustible, vehiculo.color_exterior, vehiculo.kilometraje
+       FROM ventas_clientes venta LEFT JOIN vehiculos vehiculo ON vehiculo.id = venta.vehiculo_id WHERE venta.id = ?`,
+      [id]
+    );
+    const venta = ventas[0];
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    const fecha = new Date(venta.vendido_en);
+    const formatoFecha = new Intl.DateTimeFormat('es-DO', { dateStyle: 'long', timeStyle: 'short' }).format(fecha);
+    const archivo = `factura-venta-${venta.id}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${archivo}"`);
+    const doc = new PDFDocument({ size: 'A4', margin: 48 });
+    doc.pipe(res);
+    const logo = path.join(__dirname, '..', 'JAK-Movil-App', 'src', 'assets', 'images', 'Logo_Dealer.jpg');
+    if (fs.existsSync(logo)) doc.image(logo, 48, 34, { fit: [92, 76] });
+    doc.fillColor('#231f20').fontSize(22).font('Helvetica-BoldOblique').text('ROSYBEL AUTO SALES', 154, 46);
+    doc.fillColor('#231f20').fontSize(9).font('Helvetica-Bold').text('SERVICES, S.R.L.', 154, 72);
+    doc.fillColor('#374151').fontSize(10).font('Helvetica').text('Factura de venta', 154, 88);
+    doc.moveTo(48, 112).lineTo(547, 112).strokeColor('#dc2626').stroke();
+    doc.fillColor('#111827').fontSize(17).font('Helvetica-Bold').text(`FACTURA #${venta.id}`, 48, 132);
+    doc.fillColor('#4b5563').fontSize(10).font('Helvetica').text(`Fecha y hora de compra: ${formatoFecha}`, 48, 158);
+    doc.fillColor('#111827').fontSize(13).font('Helvetica-Bold').text('Datos del cliente', 48, 202);
+    doc.fillColor('#374151').fontSize(11).font('Helvetica').text(`Nombre: ${venta.nombre} ${venta.apellido}`, 48, 226).text(`Cedula: ${venta.cedula}`, 48, 246).text(`Direccion: ${venta.direccion}`, 48, 266, { width: 470 });
+    doc.fillColor('#111827').fontSize(13).font('Helvetica-Bold').text('Detalles del vehiculo', 48, 326);
+    const detalles = [
+      ['Vehiculo', venta.vehiculo], ['Año', venta.anio || 'No especificado'], ['Tipo', venta.tipo || 'No especificado'], ['Transmision', venta.transmision || 'No especificada'], ['Combustible', venta.combustible || 'No especificado'], ['Color exterior', venta.color_exterior || 'No especificado'], ['Kilometraje', venta.kilometraje || 'No especificado'], ['Precio', venta.precio ? `${venta.moneda === 'DOP' ? 'RD$' : 'US$'} ${Number(venta.precio).toLocaleString('en-US')}` : 'Consultar precio'],
+    ];
+    let y = 352;
+    detalles.forEach(([etiqueta, valor]) => { doc.fillColor('#6b7280').font('Helvetica-Bold').fontSize(10).text(`${etiqueta}:`, 48, y); doc.fillColor('#111827').font('Helvetica').text(String(valor), 175, y); y += 24; });
+    doc.moveTo(48, 566).lineTo(547, 566).strokeColor('#e5e7eb').stroke();
+    doc.fillColor('#6b7280').fontSize(9).text('Gracias por confiar en Rosybel Auto Sales.', 48, 582, { align: 'center', width: 499 });
+    doc.end();
+  } catch (error) {
+    console.error('Error generando factura:', error);
+    if (!res.headersSent) res.status(500).json({ error: 'No fue posible generar la factura' });
   }
 });
 
@@ -484,7 +579,7 @@ app.get('/api/vehiculos/:id', async (req, res) => {
 
 app.get('/api/admin/vehiculos', requireAdmin, async (req, res) => {
   try {
-    const [vehiculos] = await db.query('SELECT * FROM vehiculos ORDER BY id DESC');
+    const [vehiculos] = await db.query(`SELECT vehiculos.*, EXISTS (SELECT 1 FROM ventas_clientes WHERE ventas_clientes.vehiculo_id = vehiculos.id) AS tiene_venta FROM vehiculos ORDER BY vehiculos.id DESC`);
     res.json(vehiculos.map((vehiculo) => agregarFotos(req, vehiculo)));
   } catch (error) {
     console.error('Error cargando inventario de administracion:', error);
@@ -565,11 +660,20 @@ app.patch('/api/admin/vehiculos/:id/vender', requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
+    const nombre = String(req.body.nombre || '').trim();
+    const apellido = String(req.body.apellido || '').trim();
+    const cedula = String(req.body.cedula || '').trim();
+    const direccion = String(req.body.direccion || '').trim();
+    if (!nombre || !apellido || !cedula || !direccion) return res.status(400).json({ error: 'Completa los datos del comprador' });
+    const [vehiculos] = await db.query("SELECT id, marca, modelo FROM vehiculos WHERE id = ? AND estado = 'disponible'", [id]);
+    if (!vehiculos[0]) return res.status(404).json({ error: 'Vehiculo no disponible para venta' });
     const [resultado] = await db.query(
       "UPDATE vehiculos SET estado = 'vendido', vendido_en = NOW() WHERE id = ? AND estado = 'disponible'",
       [id]
     );
     if (!resultado.affectedRows) return res.status(404).json({ error: 'Vehiculo no disponible para venta' });
+    const vehiculo = `${vehiculos[0].marca} ${vehiculos[0].modelo}`;
+    await db.query('INSERT INTO ventas_clientes (vehiculo_id, vehiculo, nombre, apellido, cedula, direccion) VALUES (?, ?, ?, ?, ?, ?)', [id, vehiculo, nombre, apellido, cedula, direccion]);
     res.json({ mensaje: 'Vehiculo marcado como vendido.' });
   } catch (error) {
     console.error('Error marcando vehiculo vendido:', error);
@@ -582,7 +686,7 @@ app.patch('/api/admin/vehiculos/:id/cancelar-venta', requireAdmin, async (req, r
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
     const [resultado] = await db.query(
-      "UPDATE vehiculos SET estado = 'disponible', vendido_en = NULL, publicado_en = NOW() WHERE id = ? AND estado = 'vendido'",
+      "UPDATE vehiculos SET estado = 'disponible', publicado_en = NOW() WHERE id = ? AND estado IN ('vendido', 'disponible')",
       [id]
     );
     if (!resultado.affectedRows) return res.status(404).json({ error: 'No se encontro una venta para cancelar' });
@@ -606,7 +710,7 @@ app.delete('/api/admin/vehiculos/:id', requireAdmin, async (req, res) => {
   }
 });
 
-Promise.all([prepararUsuarios(), prepararInventario(), prepararSolicitudes()])
+Promise.all([prepararUsuarios(), prepararInventario(), prepararSolicitudes(), prepararVentas()])
   .then(async () => {
     app.listen(PORT, () => {
     console.log(`Servidor activo en http://localhost:${PORT}`);
