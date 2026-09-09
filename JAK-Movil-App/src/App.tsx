@@ -20,6 +20,9 @@ import { ContactPage } from './components/Contact/ContactPage';
 import { AboutPage } from './components/about/AboutPage';
 import { ScrollReveal } from './components/animation/ScrollReveal';
 import { API_URL } from './config/api';
+import { AdminLogin, AdminPanel, AdminUser } from './components/admin/AdminAccess';
+
+const ADMIN_SESSION_KEY = 'jak-admin-session';
 
 interface ApiVehicle {
   id: number;
@@ -65,7 +68,7 @@ export default function App() {
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const pageScrollRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState<
-    'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used'
+    'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
   >('home');
 
   const [catalogVehicles, setCatalogVehicles] = useState<Vehicle[]>([]);
@@ -78,6 +81,8 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
   const [language, setLanguage] = useState<'ES' | 'EN'>('ES');
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const isEnglish = language === 'EN';
 
   function scrollToTop() {
@@ -87,7 +92,7 @@ export default function App() {
   }
 
   function navigateTo(
-    page: 'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used'
+    page: 'home' | 'about' | 'contact' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
   ) {
     setCurrentPage(page);
     scrollToTop();
@@ -101,7 +106,7 @@ export default function App() {
     try {
       setIsSearching(true);
       setSearchMessage('');
-      const response = await fetch(`${API_URL}/api/vehiculos`);
+      const response = await fetch(`${API_URL}/api/vehiculos?orden=recientes`);
 
       if (!response.ok) {
         throw new Error('No fue posible cargar el catálogo');
@@ -124,6 +129,28 @@ export default function App() {
 
   useEffect(() => {
     loadAllVehicles();
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    try {
+      const guardada = window.localStorage.getItem(ADMIN_SESSION_KEY);
+      if (!guardada) return;
+      const sesion = JSON.parse(guardada) as { token?: string };
+      if (!sesion.token) throw new Error('Sesion incompleta');
+
+      fetch(`${API_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${sesion.token}` } })
+        .then(async (response) => {
+          if (!response.ok) throw new Error('Sesion vencida');
+          const data = await response.json();
+          setAdminToken(sesion.token as string);
+          setAdminUser(data.usuario);
+        })
+        .catch(() => window.localStorage.removeItem(ADMIN_SESSION_KEY));
+    } catch {
+      window.localStorage.removeItem(ADMIN_SESSION_KEY);
+    }
   }, []);
 
   async function handleSearch(filters: SearchFilters) {
@@ -253,6 +280,26 @@ export default function App() {
       ? 'home'
       : currentPage;
 
+  function completeAdminLogin(token: string, user: AdminUser, remember: boolean) {
+    setAdminToken(token);
+    setAdminUser(user);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (remember) window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token }));
+      else window.localStorage.removeItem(ADMIN_SESSION_KEY);
+    }
+    navigateTo('admin');
+  }
+
+  function logoutAdmin() {
+    setAdminToken(null);
+    setAdminUser(null);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.localStorage.removeItem(ADMIN_SESSION_KEY);
+    }
+    navigateTo('home');
+    loadAllVehicles();
+  }
+
   return (
     <ScrollView
       ref={pageScrollRef}
@@ -272,9 +319,24 @@ export default function App() {
         onUsedVehiclesPress={loadUsedVehicles}
         onAboutPress={() => navigateTo('about')}
         onContactPress={() => navigateTo('contact')}
+        onAccessPress={() => navigateTo('login')}
+        onAdminPress={() => adminUser && navigateTo('admin')}
+        isAdmin={adminUser?.rol === 'admin'}
       />
 
-      {currentPage === 'details' && selectedVehicleId ? (
+      {currentPage === 'admin' && adminToken && adminUser ? (
+        <AdminPanel
+          token={adminToken}
+          user={adminUser}
+          onLogout={logoutAdmin}
+          onBack={() => {
+            navigateTo('home');
+            loadAllVehicles();
+          }}
+        />
+      ) : currentPage === 'login' ? (
+        <AdminLogin onAuthenticated={completeAdminLogin} onCancel={() => navigateTo('home')} />
+      ) : currentPage === 'details' && selectedVehicleId ? (
         <VehicleDetails
           vehicleId={selectedVehicleId}
           onBack={returnToCatalog}

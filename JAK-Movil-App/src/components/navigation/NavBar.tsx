@@ -23,6 +23,9 @@ interface NavBarProps {
   onUsedVehiclesPress?: () => void;
   onAboutPress?: () => void;
   onContactPress?: () => void;
+  onAccessPress?: () => void;
+  onAdminPress?: () => void;
+  isAdmin?: boolean;
   activePage?: 'home' | 'about' | 'contact' | 'new' | 'used' | string;
   language: 'ES' | 'EN';
   onLanguageChange: (language: 'ES' | 'EN') => void;
@@ -34,6 +37,9 @@ export function NavBar({
   onUsedVehiclesPress,
   onAboutPress,
   onContactPress,
+  onAccessPress,
+  onAdminPress,
+  isAdmin = false,
   activePage = 'home',
   language,
   onLanguageChange,
@@ -176,6 +182,22 @@ export function NavBar({
           >
             <Text style={styles.navText}>{language === 'ES' ? 'CONTACTO' : 'CONTACT'}</Text>
           </TouchableOpacity>
+
+          {isAdmin ? (
+            <TouchableOpacity
+              style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'admin' && styles.activeNavItem]}
+              onPress={onAdminPress}
+            >
+              <Text style={styles.navText}>ADMINISTRACIÓN</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.navItem, isMobileWeb && styles.navItemMobile]}
+              onPress={onAccessPress}
+            >
+              <Text style={styles.navText}>ACCEDER</Text>
+            </TouchableOpacity>
+          )}
 
         </View>
       </View>

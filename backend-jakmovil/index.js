@@ -3,6 +3,7 @@ const cors = require('cors');
 const db = require('./db');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 3001;
@@ -12,8 +13,137 @@ const fotoPortadaPorVehiculo = {
 };
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '8mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+const TOKEN_SECRET = process.env.ADMIN_TOKEN_SECRET || 'cambia-esta-clave-antes-de-produccion';
+const TOKEN_DURATION_MS = 8 * 60 * 60 * 1000;
+const yearColumn = '`a\u00f1o`';
+
+function crearToken(usuario) {
+  const contenido = Buffer.from(
+    JSON.stringify({ id: usuario.id, email: usuario.email, rol: usuario.rol, exp: Date.now() + TOKEN_DURATION_MS })
+  ).toString('base64url');
+  const firma = crypto.createHmac('sha256', TOKEN_SECRET).update(contenido).digest('base64url');
+  return `${contenido}.${firma}`;
+}
+
+function leerToken(token) {
+  const [contenido, firma] = String(token || '').split('.');
+  if (!contenido || !firma) return null;
+
+  const firmaEsperada = crypto.createHmac('sha256', TOKEN_SECRET).update(contenido).digest('base64url');
+  const firmaValida = Buffer.byteLength(firma) === Buffer.byteLength(firmaEsperada) &&
+    crypto.timingSafeEqual(Buffer.from(firma), Buffer.from(firmaEsperada));
+
+  if (!firmaValida) return null;
+
+  try {
+    const datos = JSON.parse(Buffer.from(contenido, 'base64url').toString('utf8'));
+    return datos.exp > Date.now() ? datos : null;
+  } catch {
+    return null;
+  }
+}
+
+function requireAdmin(req, res, next) {
+  const [tipo, token] = String(req.headers.authorization || '').split(' ');
+  const usuario = tipo === 'Bearer' ? leerToken(token) : null;
+
+  if (!usuario || usuario.rol !== 'admin') {
+    return res.status(401).json({ error: 'Acceso de administrador requerido' });
+  }
+
+  req.usuario = usuario;
+  next();
+}
+
+function verificarContrasena(contrasena, almacenada) {
+  const [sal, hashGuardado] = String(almacenada || '').split(':');
+  if (!sal || !hashGuardado) return false;
+  const hash = crypto.scryptSync(contrasena, sal, 64).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(hashGuardado, 'hex'));
+}
+
+function validarVehiculo(datos) {
+  const requerido = ['marca', 'modelo', 'anio', 'precio', 'moneda', 'tipo', 'transmision', 'combustible'];
+  const faltante = requerido.find((campo) => datos[campo] === undefined || String(datos[campo]).trim() === '');
+  const anio = Number(datos.anio);
+  const precio = Number(datos.precio);
+
+  if (faltante || !Number.isInteger(anio) || anio < 1900 || anio > 2100 || !Number.isFinite(precio) || precio <= 0 || !['USD', 'DOP'].includes(datos.moneda)) {
+    return null;
+  }
+
+  return {
+    marca: String(datos.marca).trim(), modelo: String(datos.modelo).trim(), anio, precio,
+    moneda: datos.moneda, tipo: String(datos.tipo).trim(), transmision: String(datos.transmision).trim(),
+    combustible: String(datos.combustible).trim(), condicion: String(datos.condicion || 'Usado').trim(),
+    color_exterior: datos.color_exterior ? String(datos.color_exterior).trim() : null,
+    kilometraje: datos.kilometraje ? String(datos.kilometraje).trim() : null,
+    accesorios: datos.accesorios ? String(datos.accesorios).trim() : null,
+    descripcion: datos.descripcion ? String(datos.descripcion).trim() : null,
+  };
+}
+
+async function prepararUsuarios() {
+  await db.query(`CREATE TABLE IF NOT EXISTS usuarios (
+    id INT NOT NULL AUTO_INCREMENT,
+    nombre VARCHAR(100) NOT NULL,
+    email VARCHAR(160) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    rol ENUM('admin', 'usuario') NOT NULL DEFAULT 'usuario',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY usuarios_email_unique (email)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+}
+
+async function prepararInventario() {
+  const columnas = await db.query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehiculos' AND COLUMN_NAME IN ('estado', 'vendido_en', 'publicado_en')"
+  );
+  const existentes = new Set(columnas[0].map((columna) => columna.COLUMN_NAME));
+
+  if (!existentes.has('estado')) {
+    await db.query("ALTER TABLE vehiculos ADD COLUMN estado ENUM('disponible', 'vendido') NOT NULL DEFAULT 'disponible'");
+  }
+  if (!existentes.has('vendido_en')) {
+    await db.query('ALTER TABLE vehiculos ADD COLUMN vendido_en DATETIME NULL');
+  }
+  if (!existentes.has('publicado_en')) {
+    await db.query('ALTER TABLE vehiculos ADD COLUMN publicado_en DATETIME NULL');
+    await db.query('UPDATE vehiculos SET publicado_en = NOW() WHERE publicado_en IS NULL');
+  }
+}
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const contrasena = String(req.body.contrasena || '');
+    const [usuarios] = await db.query(
+      'SELECT id, nombre, email, password_hash, rol FROM usuarios WHERE email = ? LIMIT 1',
+      [email]
+    );
+    const usuario = usuarios[0];
+
+    if (!usuario || usuario.rol !== 'admin' || !verificarContrasena(contrasena, usuario.password_hash)) {
+      return res.status(401).json({ error: 'Correo o contrasena incorrectos' });
+    }
+
+    const { password_hash, ...perfil } = usuario;
+    res.json({ token: crearToken(perfil), usuario: perfil });
+  } catch (error) {
+    console.error('Error de inicio de sesion:', error);
+    res.status(500).json({ error: 'No fue posible iniciar sesion' });
+  }
+});
+
+app.get('/api/auth/me', requireAdmin, async (req, res) => {
+  const [usuarios] = await db.query('SELECT id, nombre, email, rol FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+  if (!usuarios[0] || usuarios[0].rol !== 'admin') return res.status(401).json({ error: 'Sesion no valida' });
+  res.json({ usuario: usuarios[0] });
+});
 
 function normalizarTexto(texto) {
   return texto
@@ -132,15 +262,15 @@ app.get('/api/vehiculos/filtros', async (req, res) => {
     const { marca } = req.query;
 
     const [marcas] = await db.query(
-      'SELECT DISTINCT marca FROM vehiculos WHERE marca IS NOT NULL ORDER BY marca ASC'
+      "SELECT DISTINCT marca FROM vehiculos WHERE marca IS NOT NULL AND estado = 'disponible' ORDER BY marca ASC"
     );
 
     const [anios] = await db.query(
-      'SELECT DISTINCT `año` AS anio FROM vehiculos ORDER BY `año` DESC'
+      "SELECT DISTINCT `año` AS anio FROM vehiculos WHERE estado = 'disponible' ORDER BY `año` DESC"
     );
 
     let consultaModelos =
-      'SELECT DISTINCT modelo FROM vehiculos WHERE modelo IS NOT NULL';
+      "SELECT DISTINCT modelo FROM vehiculos WHERE modelo IS NOT NULL AND estado = 'disponible'";
 
     const parametros = [];
 
@@ -169,7 +299,7 @@ app.get('/api/vehiculos/filtros', async (req, res) => {
 // Búsqueda de vehículos.
 app.get('/api/vehiculos', async (req, res) => {
   try {
-    const { marca, modelo, anioDesde, anioHasta, condicion, precioDesde, precioHasta, moneda } = req.query;
+    const { marca, modelo, anioDesde, anioHasta, condicion, precioDesde, precioHasta, moneda, orden } = req.query;
 
     const desde = validarAnio(anioDesde);
     const hasta = validarAnio(anioHasta);
@@ -196,7 +326,7 @@ app.get('/api/vehiculos', async (req, res) => {
       });
     }
 
-    let sql = 'SELECT * FROM vehiculos WHERE 1 = 1';
+    let sql = "SELECT * FROM vehiculos WHERE estado = 'disponible'";
     const parametros = [];
 
     if (marca) {
@@ -248,7 +378,9 @@ app.get('/api/vehiculos', async (req, res) => {
       }
     }
 
-    sql += ' ORDER BY `año` DESC, marca ASC, modelo ASC';
+    sql += orden === 'recientes'
+      ? ' ORDER BY publicado_en DESC, id DESC'
+      : ' ORDER BY `año` DESC, marca ASC, modelo ASC';
 
     const [vehiculos] = await db.query(sql, parametros);
 
@@ -288,7 +420,7 @@ app.get('/api/vehiculos/:id', async (req, res) => {
     }
 
     const [vehiculos] = await db.query(
-      'SELECT * FROM vehiculos WHERE id = ?',
+      "SELECT * FROM vehiculos WHERE id = ? AND estado = 'disponible'",
       [id]
     );
 
@@ -307,6 +439,137 @@ app.get('/api/vehiculos/:id', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor activo en http://localhost:${PORT}`);
+app.get('/api/admin/vehiculos', requireAdmin, async (req, res) => {
+  try {
+    const [vehiculos] = await db.query('SELECT * FROM vehiculos ORDER BY id DESC');
+    res.json(vehiculos.map((vehiculo) => agregarFotos(req, vehiculo)));
+  } catch (error) {
+    console.error('Error cargando inventario de administracion:', error);
+    res.status(500).json({ error: 'No fue posible cargar el inventario' });
+  }
 });
+
+// Todas las operaciones que alteran el inventario requieren un administrador.
+app.post('/api/admin/vehiculos', requireAdmin, async (req, res) => {
+  try {
+    const vehiculo = validarVehiculo(req.body);
+    if (!vehiculo) return res.status(400).json({ error: 'Datos del vehiculo incompletos o invalidos' });
+
+    const [resultado] = await db.query(
+      `INSERT INTO vehiculos (marca, modelo, ${yearColumn}, precio, moneda, tipo, transmision, combustible, condicion, color_exterior, kilometraje, accesorios, descripcion, publicado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [vehiculo.marca, vehiculo.modelo, vehiculo.anio, vehiculo.precio, vehiculo.moneda, vehiculo.tipo, vehiculo.transmision, vehiculo.combustible, vehiculo.condicion, vehiculo.color_exterior, vehiculo.kilometraje, vehiculo.accesorios, vehiculo.descripcion]
+    );
+    const [vehiculos] = await db.query('SELECT * FROM vehiculos WHERE id = ?', [resultado.insertId]);
+    res.status(201).json(agregarFotos(req, vehiculos[0]));
+  } catch (error) {
+    console.error('Error creando vehiculo:', error);
+    res.status(500).json({ error: 'No fue posible crear el vehiculo' });
+  }
+});
+
+app.put('/api/admin/vehiculos/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const vehiculo = validarVehiculo(req.body);
+    if (!Number.isInteger(id) || id <= 0 || !vehiculo) return res.status(400).json({ error: 'Datos del vehiculo invalidos' });
+
+    const [resultado] = await db.query(
+      `UPDATE vehiculos SET marca = ?, modelo = ?, ${yearColumn} = ?, precio = ?, moneda = ?, tipo = ?, transmision = ?, combustible = ?, condicion = ?, color_exterior = ?, kilometraje = ?, accesorios = ?, descripcion = ? WHERE id = ?`,
+      [vehiculo.marca, vehiculo.modelo, vehiculo.anio, vehiculo.precio, vehiculo.moneda, vehiculo.tipo, vehiculo.transmision, vehiculo.combustible, vehiculo.condicion, vehiculo.color_exterior, vehiculo.kilometraje, vehiculo.accesorios, vehiculo.descripcion, id]
+    );
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'Vehiculo no encontrado' });
+    const [vehiculos] = await db.query('SELECT * FROM vehiculos WHERE id = ?', [id]);
+    res.json(agregarFotos(req, vehiculos[0]));
+  } catch (error) {
+    console.error('Error actualizando vehiculo:', error);
+    res.status(500).json({ error: 'No fue posible actualizar el vehiculo' });
+  }
+});
+
+app.post('/api/admin/vehiculos/:id/fotos', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const coincidencia = String(req.body.dataUrl || '').match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+    if (!Number.isInteger(id) || id <= 0 || !coincidencia) {
+      return res.status(400).json({ error: 'Selecciona una imagen JPG, PNG o WebP valida' });
+    }
+
+    const contenido = Buffer.from(coincidencia[2], 'base64');
+    if (!contenido.length || contenido.length > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'La imagen debe pesar como maximo 5 MB' });
+    }
+
+    const [vehiculos] = await db.query('SELECT id FROM vehiculos WHERE id = ?', [id]);
+    if (!vehiculos[0]) return res.status(404).json({ error: 'Vehiculo no encontrado' });
+
+    const extension = coincidencia[1] === 'jpeg' ? 'jpg' : coincidencia[1];
+    const carpeta = path.join(__dirname, 'uploads', `Vehiculo ${id}`);
+    fs.mkdirSync(carpeta, { recursive: true });
+    const archivo = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${extension}`;
+    fs.writeFileSync(path.join(carpeta, archivo), contenido);
+
+    res.status(201).json({
+      foto: `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(`Vehiculo ${id}`)}/${archivo}`,
+    });
+  } catch (error) {
+    console.error('Error subiendo foto:', error);
+    res.status(500).json({ error: 'No fue posible subir la foto' });
+  }
+});
+
+app.patch('/api/admin/vehiculos/:id/vender', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
+    const [resultado] = await db.query(
+      "UPDATE vehiculos SET estado = 'vendido', vendido_en = NOW() WHERE id = ? AND estado = 'disponible'",
+      [id]
+    );
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'Vehiculo no disponible para venta' });
+    res.json({ mensaje: 'Vehiculo marcado como vendido.' });
+  } catch (error) {
+    console.error('Error marcando vehiculo vendido:', error);
+    res.status(500).json({ error: 'No fue posible registrar la venta' });
+  }
+});
+
+app.patch('/api/admin/vehiculos/:id/cancelar-venta', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
+    const [resultado] = await db.query(
+      "UPDATE vehiculos SET estado = 'disponible', vendido_en = NULL, publicado_en = NOW() WHERE id = ? AND estado = 'vendido'",
+      [id]
+    );
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'No se encontro una venta para cancelar' });
+    res.json({ mensaje: 'Venta cancelada. El vehiculo vuelve a aparecer como recien agregado.' });
+  } catch (error) {
+    console.error('Error cancelando venta:', error);
+    res.status(500).json({ error: 'No fue posible cancelar la venta' });
+  }
+});
+
+app.delete('/api/admin/vehiculos/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
+    const [resultado] = await db.query('DELETE FROM vehiculos WHERE id = ?', [id]);
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'Vehiculo no encontrado' });
+    res.status(204).end();
+  } catch (error) {
+    console.error('Error eliminando vehiculo:', error);
+    res.status(500).json({ error: 'No fue posible eliminar el vehiculo' });
+  }
+});
+
+Promise.all([prepararUsuarios(), prepararInventario()])
+  .then(async () => {
+    app.listen(PORT, () => {
+    console.log(`Servidor activo en http://localhost:${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error('No fue posible preparar la tabla de usuarios:', error.message);
+    process.exit(1);
+  });
