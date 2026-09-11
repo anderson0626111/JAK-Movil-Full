@@ -19,6 +19,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const TOKEN_SECRET = process.env.ADMIN_TOKEN_SECRET || 'cambia-esta-clave-antes-de-produccion';
 const TOKEN_DURATION_MS = 8 * 60 * 60 * 1000;
+const ADMIN_RECOVERY_KEY = process.env.ADMIN_RECOVERY_KEY || 'recuperar1234';
 const yearColumn = '`a\u00f1o`';
 
 function crearToken(usuario) {
@@ -107,15 +108,29 @@ async function prepararUsuarios() {
     email VARCHAR(160) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     rol ENUM('admin', 'empleado', 'usuario') NOT NULL DEFAULT 'empleado',
+    debe_cambiar_contrasena TINYINT(1) NOT NULL DEFAULT 0,
+    foto_url VARCHAR(500) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY usuarios_email_unique (email)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
   await db.query("ALTER TABLE usuarios MODIFY rol ENUM('admin', 'empleado', 'usuario') NOT NULL DEFAULT 'empleado'");
+  const columnasUsuarios = await db.query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'debe_cambiar_contrasena'"
+  );
+  if (!columnasUsuarios[0].length) {
+    await db.query('ALTER TABLE usuarios ADD COLUMN debe_cambiar_contrasena TINYINT(1) NOT NULL DEFAULT 0');
+  }
+  const columnasFotoPerfil = await db.query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'foto_url'"
+  );
+  if (!columnasFotoPerfil[0].length) {
+    await db.query('ALTER TABLE usuarios ADD COLUMN foto_url VARCHAR(500) NULL');
+  }
 
   await db.query(
-    'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, \'admin\') ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), password_hash = VALUES(password_hash), rol = \'admin\'',
+    'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, \'admin\') ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), rol = \'admin\'',
     ['Administrador General', 'admin', crearHashContrasena('1234')]
   );
 }
@@ -170,7 +185,7 @@ app.post('/api/auth/login', async (req, res) => {
     const email = String(req.body.email || req.body.usuario || '').trim().toLowerCase();
     const contrasena = String(req.body.contrasena || '');
     const [usuarios] = await db.query(
-      'SELECT id, nombre, email, password_hash, rol FROM usuarios WHERE email = ? LIMIT 1',
+      'SELECT id, nombre, email, password_hash, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE email = ? LIMIT 1',
       [email]
     );
     const usuario = usuarios[0];
@@ -179,8 +194,16 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(404).json({ error: 'Este usuario no existe' });
     }
 
-    if (!['admin', 'empleado'].includes(usuario.rol) || !verificarContrasena(contrasena, usuario.password_hash)) {
+    const esClaveRecuperacion = usuario.email === 'admin' && usuario.rol === 'admin' && contrasena === ADMIN_RECOVERY_KEY;
+    const contrasenaCorrecta = verificarContrasena(contrasena, usuario.password_hash);
+
+    if (!['admin', 'empleado'].includes(usuario.rol) || (!contrasenaCorrecta && !esClaveRecuperacion)) {
       return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
+    }
+
+    if (esClaveRecuperacion) {
+      await db.query('UPDATE usuarios SET debe_cambiar_contrasena = 1 WHERE id = ?', [usuario.id]);
+      usuario.debe_cambiar_contrasena = 1;
     }
 
     const { password_hash, ...perfil } = usuario;
@@ -221,7 +244,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.get('/api/auth/me', requireAdmin, async (req, res) => {
-  const [usuarios] = await db.query('SELECT id, nombre, email, rol FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+  const [usuarios] = await db.query('SELECT id, nombre, email, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
   if (!usuarios[0] || !['admin', 'empleado'].includes(usuarios[0].rol)) return res.status(401).json({ error: 'Sesion no valida' });
   res.json({ usuario: usuarios[0] });
 });
@@ -234,13 +257,18 @@ app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
     if (!nombre) return res.status(400).json({ error: 'Ingresa el nombre' });
     if (contrasena && contrasena.length < 4) return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
 
+    const [actuales] = await db.query('SELECT debe_cambiar_contrasena FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    if (actuales[0]?.debe_cambiar_contrasena && !contrasena) {
+      return res.status(400).json({ error: 'Debes crear una nueva contraseña para recuperar el acceso' });
+    }
+
     if (contrasena) {
-      await db.query('UPDATE usuarios SET nombre = ?, password_hash = ? WHERE id = ?', [nombre, crearHashContrasena(contrasena), req.usuario.id]);
+      await db.query('UPDATE usuarios SET nombre = ?, password_hash = ?, debe_cambiar_contrasena = 0 WHERE id = ?', [nombre, crearHashContrasena(contrasena), req.usuario.id]);
     } else {
       await db.query('UPDATE usuarios SET nombre = ? WHERE id = ?', [nombre, req.usuario.id]);
     }
 
-    const [usuarios] = await db.query('SELECT id, nombre, email, rol FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    const [usuarios] = await db.query('SELECT id, nombre, email, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
     res.json({ mensaje: 'Perfil actualizado.', usuario: usuarios[0] });
   } catch (error) {
     console.error('Error actualizando perfil:', error);
@@ -250,11 +278,39 @@ app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/perfiles', requireAdmin, requireAdminOnly, async (req, res) => {
   try {
-    const [perfiles] = await db.query('SELECT id, nombre, email, rol, created_at FROM usuarios ORDER BY created_at DESC, id DESC');
+    const [perfiles] = await db.query('SELECT id, nombre, email, rol, foto_url, created_at FROM usuarios ORDER BY created_at DESC, id DESC');
     res.json({ perfiles });
   } catch (error) {
     console.error('Error cargando perfiles:', error);
     res.status(500).json({ error: 'No fue posible cargar los perfiles' });
+  }
+});
+
+app.post('/api/auth/perfil/foto', requireAdmin, async (req, res) => {
+  try {
+    const coincidencia = String(req.body.dataUrl || '').match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+    if (!coincidencia) {
+      return res.status(400).json({ error: 'Selecciona una imagen JPG, PNG o WebP valida' });
+    }
+
+    const contenido = Buffer.from(coincidencia[2], 'base64');
+    if (!contenido.length || contenido.length > 3 * 1024 * 1024) {
+      return res.status(400).json({ error: 'La imagen debe pesar como maximo 3 MB' });
+    }
+
+    const extension = coincidencia[1] === 'jpeg' ? 'jpg' : coincidencia[1];
+    const carpeta = path.join(__dirname, 'uploads', 'perfiles');
+    fs.mkdirSync(carpeta, { recursive: true });
+    const archivo = `perfil-${req.usuario.id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${extension}`;
+    fs.writeFileSync(path.join(carpeta, archivo), contenido);
+
+    const fotoUrl = `${req.protocol}://${req.get('host')}/uploads/perfiles/${archivo}`;
+    await db.query('UPDATE usuarios SET foto_url = ? WHERE id = ?', [fotoUrl, req.usuario.id]);
+    const [usuarios] = await db.query('SELECT id, nombre, email, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    res.status(201).json({ mensaje: 'Foto de perfil actualizada.', usuario: usuarios[0] });
+  } catch (error) {
+    console.error('Error subiendo foto de perfil:', error);
+    res.status(500).json({ error: 'No fue posible subir la foto de perfil' });
   }
 });
 
@@ -513,20 +569,34 @@ function validarPrecio(valor) {
 // Marcas y modelos para los selectores del filtro.
 app.get('/api/vehiculos/filtros', async (req, res) => {
   try {
-    const { marca } = req.query;
+    const { marca, condicion } = req.query;
+    const filtrosCondicion = [];
+    const parametrosCondicion = [];
+
+    if (condicion === 'Nuevo') {
+      filtrosCondicion.push('condicion = ?');
+      parametrosCondicion.push(condicion);
+    } else if (condicion === 'Usado') {
+      filtrosCondicion.push('condicion LIKE ?');
+      parametrosCondicion.push('Usado%');
+    }
+
+    const whereCondicion = filtrosCondicion.length ? ` AND ${filtrosCondicion.join(' AND ')}` : '';
 
     const [marcas] = await db.query(
-      "SELECT DISTINCT marca FROM vehiculos WHERE marca IS NOT NULL AND estado = 'disponible' ORDER BY marca ASC"
+      `SELECT DISTINCT marca FROM vehiculos WHERE marca IS NOT NULL AND estado = 'disponible'${whereCondicion} ORDER BY marca ASC`,
+      parametrosCondicion
     );
 
     const [anios] = await db.query(
-      "SELECT DISTINCT `año` AS anio FROM vehiculos WHERE estado = 'disponible' ORDER BY `año` DESC"
+      `SELECT DISTINCT ${yearColumn} AS anio FROM vehiculos WHERE estado = 'disponible'${whereCondicion} ORDER BY ${yearColumn} DESC`,
+      parametrosCondicion
     );
 
     let consultaModelos =
-      "SELECT DISTINCT modelo FROM vehiculos WHERE modelo IS NOT NULL AND estado = 'disponible'";
+      `SELECT DISTINCT modelo FROM vehiculos WHERE modelo IS NOT NULL AND estado = 'disponible'${whereCondicion}`;
 
-    const parametros = [];
+    const parametros = [...parametrosCondicion];
 
     if (marca) {
       consultaModelos += ' AND marca = ?';

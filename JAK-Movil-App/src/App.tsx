@@ -170,13 +170,21 @@ export default function App() {
     }
   }, []);
 
+  function getSearchMessage(count: number, page: 'results' | 'new' | 'used') {
+    if (page === 'new') return count === 1 ? 'Mostrando 1 vehículo nuevo' : `Mostrando ${count} vehículos nuevos`;
+    if (page === 'used') return count === 1 ? 'Mostrando 1 vehículo usado' : `Mostrando ${count} vehículos usados`;
+    return count === 1 ? 'Mostrando 1 vehículo encontrado' : `Mostrando ${count} vehículos encontrados`;
+  }
+
   async function handleSearch(filters: SearchFilters) {
     try {
-      navigateTo('results');
+      const searchPage = currentPage === 'new' || currentPage === 'used' ? currentPage : 'results';
+      navigateTo(searchPage);
       setIsSearching(true);
       setSearchMessage('');
 
       const query = new URLSearchParams();
+      const condicion = searchPage === 'new' ? 'Nuevo' : searchPage === 'used' ? 'Usado' : '';
 
       if (filters.marca) query.append('marca', filters.marca);
       if (filters.modelo) query.append('modelo', filters.modelo);
@@ -185,6 +193,7 @@ export default function App() {
       if (filters.precioDesde) query.append('precioDesde', filters.precioDesde);
       if (filters.precioHasta) query.append('precioHasta', filters.precioHasta);
       if (filters.moneda) query.append('moneda', filters.moneda);
+      if (condicion) query.append('condicion', condicion);
 
       const url = `${API_URL}/api/vehiculos${
         query.toString() ? `?${query}` : ''
@@ -200,11 +209,7 @@ export default function App() {
       const results = data.map(mapApiVehicle);
 
       setCatalogVehicles(results);
-      setSearchMessage(
-        results.length === 1
-          ? 'Mostrando 1 vehículo encontrado'
-          : `Mostrando ${results.length} vehículos encontrados`
-      );
+      setSearchMessage(getSearchMessage(results.length, searchPage));
     } catch (error) {
       console.error('Error en búsqueda:', error);
       setCatalogVehicles([]);
@@ -364,7 +369,7 @@ export default function App() {
       ) : currentPage === 'results' || currentPage === 'new' || currentPage === 'used' ? (
         <View style={[styles.content, isMobileWeb && styles.contentMobile]}>
           <View style={styles.filterWrapper}>
-            <FilterPanel onSearch={handleSearch} language={language} />
+            <FilterPanel onSearch={handleSearch} language={language} condition={currentPage === 'new' ? 'Nuevo' : currentPage === 'used' ? 'Usado' : undefined} />
           </View>
           <ScrollReveal style={styles.revealSection}>
             <View style={styles.resultsHeader}>
