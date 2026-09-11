@@ -135,6 +135,22 @@ export default function App() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
+    const path = window.location.pathname.replace(/\/$/, '');
+    const adminRequested = path === '/admin' || new URLSearchParams(window.location.search).get('admin') === '1';
+
+    if (adminRequested) {
+      if (adminToken && ['admin', 'empleado'].includes(adminUser?.rol || '')) {
+        setCurrentPage('admin');
+      } else {
+        setCurrentPage('login');
+      }
+      scrollToTop();
+    }
+  }, [adminToken, adminUser]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
     try {
       const guardada = window.localStorage.getItem(ADMIN_SESSION_KEY);
       if (!guardada) return;
@@ -320,7 +336,6 @@ export default function App() {
         onUsedVehiclesPress={loadUsedVehicles}
         onAboutPress={() => navigateTo('about')}
         onContactPress={() => navigateTo('contact')}
-        onAccessPress={() => navigateTo('login')}
         onAdminPress={() => adminUser && navigateTo('admin')}
         isAdmin={adminUser?.rol === 'admin'}
       />
@@ -330,6 +345,7 @@ export default function App() {
           token={adminToken}
           user={adminUser}
           language={language}
+          onUserUpdated={setAdminUser}
           onLogout={logoutAdmin}
           onBack={() => {
             navigateTo('home');
@@ -351,8 +367,10 @@ export default function App() {
             <FilterPanel onSearch={handleSearch} language={language} />
           </View>
           <ScrollReveal style={styles.revealSection}>
-            <Text style={styles.title}>{currentPage === 'new' ? (isEnglish ? 'New Vehicles' : 'Vehículos Nuevos') : currentPage === 'used' ? (isEnglish ? 'Used Vehicles' : 'Vehículos Usados') : (isEnglish ? 'Search results' : 'Resultados de búsqueda')}</Text>
-            {!!searchMessage && <Text style={styles.resultsText}>{searchMessage}</Text>}
+            <View style={styles.resultsHeader}>
+              <Text style={styles.title}>{currentPage === 'new' ? (isEnglish ? 'New Vehicles' : 'Vehículos Nuevos') : currentPage === 'used' ? (isEnglish ? 'Used Vehicles' : 'Vehículos Usados') : (isEnglish ? 'Search results' : 'Resultados de búsqueda')}</Text>
+              {!!searchMessage && <Text style={styles.resultsText}>{searchMessage}</Text>}
+            </View>
           </ScrollReveal>
           {isSearching ? (
             <ScrollReveal>
@@ -466,6 +484,10 @@ const styles = StyleSheet.create({
   },
   revealSection: {
     width: '100%',
+  },
+  resultsHeader: {
+    width: '100%',
+    alignItems: 'center',
   },
   heroSection: {
     width: '100%',

@@ -51,11 +51,19 @@ function requireAdmin(req, res, next) {
   const [tipo, token] = String(req.headers.authorization || '').split(' ');
   const usuario = tipo === 'Bearer' ? leerToken(token) : null;
 
-  if (!usuario || usuario.rol !== 'admin') {
-    return res.status(401).json({ error: 'Acceso de administrador requerido' });
+  if (!usuario || !['admin', 'empleado'].includes(usuario.rol)) {
+    return res.status(401).json({ error: 'Acceso requerido' });
   }
 
   req.usuario = usuario;
+  next();
+}
+
+function requireAdminOnly(req, res, next) {
+  if (!req.usuario || req.usuario.rol !== 'admin') {
+    return res.status(403).json({ error: 'Acceso de administrador requerido' });
+  }
+
   next();
 }
 
@@ -64,6 +72,11 @@ function verificarContrasena(contrasena, almacenada) {
   if (!sal || !hashGuardado) return false;
   const hash = crypto.scryptSync(contrasena, sal, 64).toString('hex');
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(hashGuardado, 'hex'));
+}
+
+function crearHashContrasena(contrasena) {
+  const sal = crypto.randomBytes(16).toString('hex');
+  return `${sal}:${crypto.scryptSync(contrasena, sal, 64).toString('hex')}`;
 }
 
 function validarVehiculo(datos) {
@@ -93,11 +106,18 @@ async function prepararUsuarios() {
     nombre VARCHAR(100) NOT NULL,
     email VARCHAR(160) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    rol ENUM('admin', 'usuario') NOT NULL DEFAULT 'usuario',
+    rol ENUM('admin', 'empleado', 'usuario') NOT NULL DEFAULT 'empleado',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY usuarios_email_unique (email)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  await db.query("ALTER TABLE usuarios MODIFY rol ENUM('admin', 'empleado', 'usuario') NOT NULL DEFAULT 'empleado'");
+
+  await db.query(
+    'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, \'admin\') ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), password_hash = VALUES(password_hash), rol = \'admin\'',
+    ['Administrador General', 'admin', crearHashContrasena('1234')]
+  );
 }
 
 async function prepararSolicitudes() {
@@ -147,7 +167,7 @@ async function prepararInventario() {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
+    const email = String(req.body.email || req.body.usuario || '').trim().toLowerCase();
     const contrasena = String(req.body.contrasena || '');
     const [usuarios] = await db.query(
       'SELECT id, nombre, email, password_hash, rol FROM usuarios WHERE email = ? LIMIT 1',
@@ -155,8 +175,12 @@ app.post('/api/auth/login', async (req, res) => {
     );
     const usuario = usuarios[0];
 
-    if (!usuario || usuario.rol !== 'admin' || !verificarContrasena(contrasena, usuario.password_hash)) {
-      return res.status(401).json({ error: 'Correo o contrasena incorrectos' });
+    if (!usuario) {
+      return res.status(404).json({ error: 'Este usuario no existe' });
+    }
+
+    if (!['admin', 'empleado'].includes(usuario.rol) || !verificarContrasena(contrasena, usuario.password_hash)) {
+      return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
     }
 
     const { password_hash, ...perfil } = usuario;
@@ -167,10 +191,102 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const nombre = String(req.body.nombre || '').trim();
+    const email = String(req.body.email || req.body.usuario || '').trim().toLowerCase();
+    const contrasena = String(req.body.contrasena || '');
+
+    if (!nombre || !email || contrasena.length < 4) {
+      return res.status(400).json({ error: 'Completa nombre, usuario y contraseña' });
+    }
+    if (/\s/.test(email)) {
+      return res.status(400).json({ error: 'El usuario no debe contener espacios' });
+    }
+
+    const passwordHash = crearHashContrasena(contrasena);
+    const [resultado] = await db.query(
+      'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, \'empleado\')',
+      [nombre, email, passwordHash]
+    );
+    const usuario = { id: resultado.insertId, nombre, email, rol: 'empleado' };
+    res.status(201).json({ token: crearToken(usuario), usuario });
+  } catch (error) {
+    if (error && error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Ese usuario ya esta registrado' });
+    }
+    console.error('Error de registro:', error);
+    res.status(500).json({ error: 'No fue posible registrar el usuario' });
+  }
+});
+
 app.get('/api/auth/me', requireAdmin, async (req, res) => {
   const [usuarios] = await db.query('SELECT id, nombre, email, rol FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
-  if (!usuarios[0] || usuarios[0].rol !== 'admin') return res.status(401).json({ error: 'Sesion no valida' });
+  if (!usuarios[0] || !['admin', 'empleado'].includes(usuarios[0].rol)) return res.status(401).json({ error: 'Sesion no valida' });
   res.json({ usuario: usuarios[0] });
+});
+
+app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
+  try {
+    const nombre = String(req.body.nombre || '').trim();
+    const contrasena = String(req.body.contrasena || '');
+
+    if (!nombre) return res.status(400).json({ error: 'Ingresa el nombre' });
+    if (contrasena && contrasena.length < 4) return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+
+    if (contrasena) {
+      await db.query('UPDATE usuarios SET nombre = ?, password_hash = ? WHERE id = ?', [nombre, crearHashContrasena(contrasena), req.usuario.id]);
+    } else {
+      await db.query('UPDATE usuarios SET nombre = ? WHERE id = ?', [nombre, req.usuario.id]);
+    }
+
+    const [usuarios] = await db.query('SELECT id, nombre, email, rol FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    res.json({ mensaje: 'Perfil actualizado.', usuario: usuarios[0] });
+  } catch (error) {
+    console.error('Error actualizando perfil:', error);
+    res.status(500).json({ error: 'No fue posible actualizar el perfil' });
+  }
+});
+
+app.get('/api/admin/perfiles', requireAdmin, requireAdminOnly, async (req, res) => {
+  try {
+    const [perfiles] = await db.query('SELECT id, nombre, email, rol, created_at FROM usuarios ORDER BY created_at DESC, id DESC');
+    res.json({ perfiles });
+  } catch (error) {
+    console.error('Error cargando perfiles:', error);
+    res.status(500).json({ error: 'No fue posible cargar los perfiles' });
+  }
+});
+
+app.delete('/api/admin/perfiles/:id', requireAdmin, requireAdminOnly, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
+    if (id === req.usuario.id) return res.status(400).json({ error: 'No puedes eliminar tu propio acceso' });
+
+    const [resultado] = await db.query('DELETE FROM usuarios WHERE id = ?', [id]);
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'Perfil no encontrado' });
+    res.json({ mensaje: 'Perfil eliminado. El acceso fue revocado.' });
+  } catch (error) {
+    console.error('Error eliminando perfil:', error);
+    res.status(500).json({ error: 'No fue posible eliminar el perfil' });
+  }
+});
+
+app.patch('/api/admin/perfiles/:id/contrasena', requireAdmin, requireAdminOnly, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const contrasena = String(req.body.contrasena || '');
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
+    if (contrasena.length < 4) return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+
+    const [resultado] = await db.query('UPDATE usuarios SET password_hash = ? WHERE id = ?', [crearHashContrasena(contrasena), id]);
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'Perfil no encontrado' });
+    res.json({ mensaje: 'Contraseña restablecida.' });
+  } catch (error) {
+    console.error('Error restableciendo contraseña:', error);
+    res.status(500).json({ error: 'No fue posible restablecer la contraseña' });
+  }
 });
 
 app.post('/api/solicitudes-clientes', async (req, res) => {
