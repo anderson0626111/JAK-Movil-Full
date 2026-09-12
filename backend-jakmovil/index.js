@@ -314,6 +314,30 @@ app.post('/api/auth/perfil/foto', requireAdmin, async (req, res) => {
   }
 });
 
+app.delete('/api/auth/perfil/foto', requireAdmin, async (req, res) => {
+  try {
+    const [usuarios] = await db.query('SELECT foto_url FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    const fotoUrl = usuarios[0]?.foto_url;
+
+    if (fotoUrl) {
+      try {
+        const nombreArchivo = path.basename(new URL(fotoUrl).pathname);
+        const rutaArchivo = path.join(__dirname, 'uploads', 'perfiles', nombreArchivo);
+        if (fs.existsSync(rutaArchivo)) fs.unlinkSync(rutaArchivo);
+      } catch (errorArchivo) {
+        console.error('No fue posible borrar el archivo de foto de perfil:', errorArchivo);
+      }
+    }
+
+    await db.query('UPDATE usuarios SET foto_url = NULL WHERE id = ?', [req.usuario.id]);
+    const [actualizados] = await db.query('SELECT id, nombre, email, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    res.json({ mensaje: 'Foto de perfil eliminada.', usuario: actualizados[0] });
+  } catch (error) {
+    console.error('Error eliminando foto de perfil:', error);
+    res.status(500).json({ error: 'No fue posible eliminar la foto de perfil' });
+  }
+});
+
 app.delete('/api/admin/perfiles/:id', requireAdmin, requireAdminOnly, async (req, res) => {
   try {
     const id = Number(req.params.id);
