@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   Image,
+  Modal,
   StyleSheet,
   TouchableOpacity,
   Platform,
@@ -24,54 +25,88 @@ export interface Vehicle {
 interface VehicleCardProps {
   vehicle: Vehicle;
   onPress?: () => void;
+  language?: 'ES' | 'EN';
 }
 
-export function VehicleCard({ vehicle, onPress }: VehicleCardProps) {
+function translateVehicleValue(value: string, isEnglish: boolean) {
+  if (!isEnglish) return value;
+  const translations: Record<string, string> = {
+    nuevo: 'New', usado: 'Used', automática: 'Automatic', automatico: 'Automatic', automático: 'Automatic',
+    gasolina: 'Gasoline', eléctrico: 'Electric', electrico: 'Electric', híbrido: 'Hybrid', hibrido: 'Hybrid',
+    sedán: 'Sedan', sedan: 'Sedan', camioneta: 'Pickup truck', jeepeta: 'SUV',
+  };
+  return translations[value.trim().toLowerCase()] || value;
+}
+
+export function VehicleCard({ vehicle, onPress, language = 'ES' }: VehicleCardProps) {
   const { width } = useWindowDimensions();
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
+  const isEnglish = language === 'EN';
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const imageSource =
+    typeof vehicle.imageUrl === 'string' && vehicle.imageUrl.length > 0
+      ? { uri: vehicle.imageUrl }
+      : vehicle.imageUrl;
 
   return (
-    <TouchableOpacity
-      style={[styles.card, isMobileWeb && styles.cardMobile]}
-      activeOpacity={0.9}
-      onPress={onPress}
-    >
+    <>
+    <View style={[styles.card, isMobileWeb && styles.cardMobile]}>
       {/* Imagen del vehículo */}
-      <View style={styles.imageContainer}>
+      <TouchableOpacity
+        style={styles.imageContainer}
+        activeOpacity={0.9}
+        accessibilityLabel={`${isEnglish ? 'Enlarge photo of' : 'Ampliar foto de'} ${vehicle.title}`}
+        onPress={() => setPreviewOpen(true)}
+      >
         <Image
-          source={
-            typeof vehicle.imageUrl === 'string' && vehicle.imageUrl.length > 0
-                ? { uri: vehicle.imageUrl }
-                : vehicle.imageUrl
-  }
-  style={styles.image}
-  resizeMode="cover"
+          source={imageSource}
+          style={styles.image}
+          resizeMode="cover"
         />
         <View style={styles.priceTag}>
-          <Text style={styles.priceText}>{vehicle.price}</Text>
+          <Text style={styles.priceText}>{isEnglish && vehicle.price === 'Consultar precio' ? 'Contact for price' : vehicle.price}</Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* Detalles del vehículo */}
       <View style={styles.detailsContainer}>
         <Text style={styles.title} numberOfLines={1}>
           {vehicle.title}
         </Text>
-        <Text style={styles.yearText}>Año: {vehicle.year}</Text>
+        <Text style={styles.yearText}>{isEnglish ? 'Year' : 'Año'}: {vehicle.year}</Text>
 
         {/* Especificaciones clave */}
         <View style={styles.specsRow}>
-          <Text style={styles.specItem}> {vehicle.mileage}</Text>
-          <Text style={styles.specItem}> {vehicle.transmission}</Text>
-          <Text style={styles.specItem}> {vehicle.fuel}</Text>
+          <Text style={styles.specItem}> {translateVehicleValue(vehicle.mileage, isEnglish)}</Text>
+          <Text style={styles.specItem}> {translateVehicleValue(vehicle.transmission, isEnglish)}</Text>
+          <Text style={styles.specItem}> {translateVehicleValue(vehicle.fuel, isEnglish)}</Text>
         </View>
 
         {/* Botón de acción */}
         <TouchableOpacity style={styles.button} onPress={onPress}>
-          <Text style={styles.buttonText}>Ver Detalles</Text>
+          <Text style={styles.buttonText}>{isEnglish ? 'View Details' : 'Ver Detalles'}</Text>
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
+
+    <Modal
+      visible={previewOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setPreviewOpen(false)}
+    >
+      <View style={styles.previewOverlay}>
+        <TouchableOpacity
+          style={styles.previewClose}
+          accessibilityLabel={isEnglish ? 'Close enlarged image' : 'Cerrar imagen ampliada'}
+          onPress={() => setPreviewOpen(false)}
+        >
+          <Text style={styles.previewCloseText}>×</Text>
+        </TouchableOpacity>
+        <Image source={imageSource} style={styles.previewImage} resizeMode="contain" />
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -153,5 +188,34 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 13,
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.94)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 18,
+  },
+  previewImage: {
+    width: '100%',
+    height: '88%',
+  },
+  previewClose: {
+    position: 'absolute',
+    top: 20,
+    right: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  previewCloseText: {
+    color: '#ffffff',
+    fontSize: 32,
+    lineHeight: 35,
+    marginTop: -3,
   },
 });

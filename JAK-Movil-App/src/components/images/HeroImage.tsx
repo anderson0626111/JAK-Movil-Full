@@ -6,11 +6,21 @@ const CARD_MARGIN = -30;
 
 interface HeroImageProps {
   onVehiclePress?: (vehicleId: string) => void;
+  language?: 'ES' | 'EN';
 }
 
-export function HeroImage({ onVehiclePress }: HeroImageProps) {
+function translateValue(value: string, isEnglish: boolean) {
+  if (!isEnglish) return value;
+  const translations: Record<string, string> = {
+    gasolina: 'Gasoline', automática: 'Automatic', automático: 'Automatic', usado: 'Used', nuevo: 'New',
+  };
+  return translations[value.trim().toLowerCase()] || value;
+}
+
+export function HeroImage({ onVehiclePress, language = 'ES' }: HeroImageProps) {
   const { width } = useWindowDimensions();
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
+  const isEnglish = language === 'EN';
   const viewportWidth = Math.min(width, 1200);
   const cardMargin = isMobileWeb ? 8 : CARD_MARGIN;
   const cardWidth = isMobileWeb
@@ -23,18 +33,19 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
   );
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
+  const carouselVehicles = vehicles;
 
   useEffect(() => {
     const interval = setInterval(() => {
       let nextIndex = activeIndex + 1;
-      if (nextIndex >= vehicles.length) {
+      if (nextIndex >= carouselVehicles.length) {
         nextIndex = 0;
       }
       scrollToIndex(nextIndex);
     }, 3500);
 
     return () => clearInterval(interval);
-  }, [activeIndex]);
+  }, [activeIndex, carouselVehicles.length]);
 
   const scrollToIndex = (index: number) => {
     setActiveIndex(index);
@@ -56,12 +67,12 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
   }, [slideInterval]);
 
   const handleNext = () => {
-    const nextIndex = (activeIndex + 1) % vehicles.length;
+    const nextIndex = (activeIndex + 1) % carouselVehicles.length;
     scrollToIndex(nextIndex);
   };
 
   const handlePrev = () => {
-    const prevIndex = (activeIndex - 1 + vehicles.length) % vehicles.length;
+    const prevIndex = (activeIndex - 1 + carouselVehicles.length) % carouselVehicles.length;
     scrollToIndex(prevIndex);
   };
 
@@ -86,7 +97,7 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
             { paddingHorizontal: horizontalPadding },
           ]}
         >
-          {vehicles.map((vehicleItem, index) => {
+          {carouselVehicles.map((vehicleItem, index) => {
             const vehicle = vehicleItem as any;
             const isActive = activeIndex === index;
             const isLeft = index < activeIndex;
@@ -137,13 +148,13 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
                 {/* Banner inferior en blanco */}
                 <View style={[styles.infoBanner, isMobileWeb && styles.infoBannerMobile]}>
                   <Text style={[styles.vehicleTitle, isMobileWeb && styles.vehicleTitleMobile]} numberOfLines={1}>
-                    {vehicle.title || vehicle.name || 'Vehículo'}
+                    {vehicle.title || vehicle.name || (isEnglish ? 'Vehicle' : 'Vehículo')}
                   </Text>
                   
                   <View style={[styles.detailsRow, isMobileWeb && styles.detailsRowMobile]}>
                     <View style={[styles.specsGroup, isMobileWeb && styles.specsGroupMobile]}>
-                      <Text style={styles.specText}> {vehicle.fuel || vehicle.fuelType || 'Gasolina'}</Text>
-                      <Text style={styles.specText}> {vehicle.transmission || 'Automática'}</Text>
+                      <Text style={styles.specText}> {translateValue(vehicle.fuel || vehicle.fuelType || 'Gasolina', isEnglish)}</Text>
+                      <Text style={styles.specText}> {translateValue(vehicle.transmission || 'Automática', isEnglish)}</Text>
                       <Text style={styles.specText}> {vehicle.year || '2022'}</Text>
                     </View>
                     <View style={styles.priceBadge}>
@@ -168,12 +179,12 @@ export function HeroImage({ onVehiclePress }: HeroImageProps) {
 
         {/* Dots */}
         <View style={styles.pagination}>
-          {vehicles.map((_, index) => (
+          {carouselVehicles.map((_, index) => (
             <View
               key={index}
               style={[
                 styles.dot,
-                activeIndex % vehicles.length === index ? styles.activeDot : styles.inactiveDot,
+                activeIndex % carouselVehicles.length === index ? styles.activeDot : styles.inactiveDot,
               ]}
             />
           ))}

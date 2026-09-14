@@ -1,9 +1,41 @@
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
+const backendRoot = path.join(projectRoot, 'backend-jakmovil');
 const processes = [];
 let closing = false;
+
+function ensureBackendDependencies() {
+  const packageJson = require(path.join(backendRoot, 'package.json'));
+  const dependencies = Object.keys(packageJson.dependencies || {});
+  const missingDependencies = dependencies.filter((dependency) => {
+    try {
+      require.resolve(dependency, { paths: [backendRoot] });
+      return false;
+    } catch {
+      return true;
+    }
+  });
+
+  if (missingDependencies.length === 0) return;
+
+  console.log(
+    `[BACKEND] Instalando dependencias faltantes: ${missingDependencies.join(', ')}`
+  );
+
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const result = spawnSync(npmCommand, ['install', '--no-audit', '--no-fund'], {
+    cwd: backendRoot,
+    stdio: 'inherit',
+    windowsHide: true,
+  });
+
+  if (result.status !== 0) {
+    console.error('[BACKEND] No fue posible instalar las dependencias.');
+    process.exit(result.status || 1);
+  }
+}
 
 function start(name, npmScript, cwd, interactive = false) {
   console.log(`[${name}] Iniciando...`);
@@ -73,10 +105,12 @@ function shutdown(exitCode = 0) {
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
+ensureBackendDependencies();
+
 start(
   'BACKEND',
   'dev',
-  path.join(projectRoot, 'backend-jakmovil')
+  backendRoot
 );
 
 start(

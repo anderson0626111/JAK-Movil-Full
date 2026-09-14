@@ -19,20 +19,38 @@ interface ApiVehicle {
   tipo: string; condicion: string | null; transmision: string; combustible: string;
   imagen: string | null; fotos: string[]; color_exterior: string | null;
   color_interior: string | null; kilometraje: string | null; cilindraje: string | null;
-  traccion: string | null; sector: string | null; vendedor: string | null;
-  accesorios: string | null; equipamiento: string | null; descripcion: string | null;
+  traccion: string | null; accesorios: string | null; equipamiento: string | null;
 }
 
-interface VehicleDetailsProps { vehicleId: string; onBack: () => void; }
+interface VehicleDetailsProps { vehicleId: string; onBack: () => void; language?: 'ES' | 'EN'; }
 
-function formatPrice(price: number, currency: string) {
-  if (!Number(price)) return 'Consultar precio';
+function formatPrice(price: number, currency: string, isEnglish: boolean) {
+  if (!Number(price)) return isEnglish ? 'Contact for price' : 'Consultar precio';
   return `${currency === 'DOP' ? 'RD$' : 'US$'} ${Number(price).toLocaleString('en-US')}`;
+}
+
+function translateVehicleValue(value: string | null, isEnglish: boolean) {
+  if (!value || !isEnglish) return value;
+  const translations: Record<string, string> = {
+    nuevo: 'New', usado: 'Used', automática: 'Automatic', automatico: 'Automatic', automático: 'Automatic',
+    gasolina: 'Gasoline', diésel: 'Diesel', diesel: 'Diesel', eléctrico: 'Electric', electrico: 'Electric',
+    híbrido: 'Hybrid', hibrido: 'Hybrid', sedán: 'Sedan', sedan: 'Sedan', camioneta: 'Pickup truck', jeepeta: 'SUV',
+    blanco: 'White', negro: 'Black', gris: 'Gray', rojo: 'Red', azul: 'Blue', plateado: 'Silver',
+  };
+  return translations[value.trim().toLowerCase()] || value;
 }
 
 function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
   if (value === null || value === undefined || value === '') return null;
   return <View style={styles.infoItem}><Text style={styles.label}>{label}</Text><Text style={styles.value}>{value}</Text></View>;
+}
+
+function getVisibleMileage(vehicle: ApiVehicle) {
+  const mileage = vehicle.kilometraje?.trim();
+  if (!mileage || !vehicle.condicion?.toLowerCase().startsWith('usado')) return mileage || null;
+
+  const numericValue = Number(mileage.replace(/,/g, '').match(/[0-9]+(?:\.[0-9]+)?/)?.[0]);
+  return Number.isFinite(numericValue) && numericValue <= 2 ? null : mileage;
 }
 
 function FeatureList({ title, value }: { title: string; value?: string | null }) {
@@ -48,9 +66,10 @@ function FeatureList({ title, value }: { title: string; value?: string | null })
   );
 }
 
-export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
+export function VehicleDetails({ vehicleId, onBack, language = 'ES' }: VehicleDetailsProps) {
   const { width } = useWindowDimensions();
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
+  const isEnglish = language === 'EN';
   const [vehicle, setVehicle] = useState<ApiVehicle | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState('');
   const [loading, setLoading] = useState(true);
@@ -62,18 +81,18 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
       try {
         setLoading(true); setError('');
         const response = await fetch(`${API_URL}/api/vehiculos/${vehicleId}`);
-        if (!response.ok) throw new Error('No se encontró el vehículo');
+        if (!response.ok) throw new Error(isEnglish ? 'Vehicle not found' : 'No se encontró el vehículo');
         const data: ApiVehicle = await response.json();
         const photos = data.fotos?.length ? data.fotos : data.imagen ? [data.imagen] : [];
         setVehicle({ ...data, fotos: photos });
         setSelectedPhoto(photos[0] || '');
       } catch (requestError) {
         console.error('Error al cargar vehículo:', requestError);
-        setError('No fue posible cargar la información del vehículo.');
+        setError(isEnglish ? 'The vehicle information could not be loaded.' : 'No fue posible cargar la información del vehículo.');
       } finally { setLoading(false); }
     }
     loadVehicle();
-  }, [vehicleId]);
+  }, [vehicleId, isEnglish]);
 
   function showPreviousPhoto() {
     if (!vehicle || vehicle.fotos.length < 2) return;
@@ -92,16 +111,16 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
     setSelectedPhoto(vehicle.fotos[nextIndex]);
   }
 
-  if (loading) return <View style={styles.statusContainer}><ActivityIndicator size="large" color="#dc2626" /><Text style={styles.statusText}>Cargando vehículo...</Text></View>;
-  if (error || !vehicle) return <View style={styles.statusContainer}><Text style={styles.errorText}>{error}</Text><TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>VOLVER A RESULTADOS</Text></TouchableOpacity></View>;
+  if (loading) return <View style={styles.statusContainer}><ActivityIndicator size="large" color="#dc2626" /><Text style={styles.statusText}>{isEnglish ? 'Loading vehicle...' : 'Cargando vehículo...'}</Text></View>;
+  if (error || !vehicle) return <View style={styles.statusContainer}><Text style={styles.errorText}>{error}</Text><TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>{isEnglish ? 'BACK TO RESULTS' : 'VOLVER A RESULTADOS'}</Text></TouchableOpacity></View>;
 
   return (
     <View style={[styles.container, isMobileWeb && styles.containerMobile]}>
       <ScrollReveal>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>← VOLVER</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>← {isEnglish ? 'BACK' : 'VOLVER'}</Text></TouchableOpacity>
         <View style={styles.headingRow}>
-          <View><Text style={[styles.title, isMobileWeb && styles.titleMobile]}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{vehicle.año} · {vehicle.condicion || vehicle.tipo}</Text></View>
-          <Text style={[styles.price, isMobileWeb && styles.priceMobile]}>{formatPrice(vehicle.precio, vehicle.moneda)}</Text>
+          <View><Text style={[styles.title, isMobileWeb && styles.titleMobile]}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{vehicle.año} · {translateVehicleValue(vehicle.condicion || vehicle.tipo, isEnglish)}</Text></View>
+          <Text style={[styles.price, isMobileWeb && styles.priceMobile]}>{formatPrice(vehicle.precio, vehicle.moneda, isEnglish)}</Text>
         </View>
       </ScrollReveal>
 
@@ -114,26 +133,26 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
                 <View style={styles.imageBackdropOverlay} />
                 <TouchableOpacity
                   activeOpacity={0.94}
-                  accessibilityLabel="Ampliar fotografía"
+                  accessibilityLabel={isEnglish ? 'Enlarge photo' : 'Ampliar fotografía'}
                   style={styles.mainImageTapArea}
                   onPress={() => setLightboxOpen(true)}
                 >
                   <Image source={{ uri: selectedPhoto }} style={styles.mainImage} resizeMode="contain" />
                   <View style={styles.zoomHint}>
-                    <Text style={styles.zoomHintText}>AMPLIAR ⛶</Text>
+                    <Text style={styles.zoomHintText}>{isEnglish ? 'ENLARGE' : 'AMPLIAR'} ⛶</Text>
                   </View>
                 </TouchableOpacity>
                 {vehicle.fotos.length > 1 && (
                   <>
                     <TouchableOpacity
-                      accessibilityLabel="Foto anterior"
+                      accessibilityLabel={isEnglish ? 'Previous photo' : 'Foto anterior'}
                       style={[styles.galleryArrow, styles.galleryArrowLeft]}
                       onPress={showPreviousPhoto}
                     >
                       <Text style={styles.galleryArrowText}>‹</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      accessibilityLabel="Foto siguiente"
+                      accessibilityLabel={isEnglish ? 'Next photo' : 'Foto siguiente'}
                       style={[styles.galleryArrow, styles.galleryArrowRight]}
                       onPress={showNextPhoto}
                     >
@@ -142,7 +161,7 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
                   </>
                 )}
               </>
-            ) : <View style={styles.imageFallback}><Text style={styles.fallbackText}>No hay fotografías disponibles</Text></View>}
+            ) : <View style={styles.imageFallback}><Text style={styles.fallbackText}>{isEnglish ? 'No photos available' : 'No hay fotografías disponibles'}</Text></View>}
           </View>
           {vehicle.fotos.length > 1 && <View style={styles.thumbnailRow}>{vehicle.fotos.map((photo, index) => (
             <TouchableOpacity key={photo} activeOpacity={0.8} onPress={() => setSelectedPhoto(photo)} style={[styles.thumbnailButton, isMobileWeb && styles.thumbnailButtonMobile, selectedPhoto === photo && styles.thumbnailSelected]}>
@@ -154,21 +173,18 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
 
       <ScrollReveal delay={50}>
         <View style={styles.detailsCard}>
-          <Text style={styles.sectionTitle}>Información del vehículo</Text>
+          <Text style={styles.sectionTitle}>{isEnglish ? 'Vehicle information' : 'Información del vehículo'}</Text>
           <View style={styles.infoGrid}>
-            <InfoRow label="Marca" value={vehicle.marca} /><InfoRow label="Modelo" value={vehicle.modelo} /><InfoRow label="Año" value={vehicle.año} />
-            <InfoRow label="Tipo" value={vehicle.tipo} /><InfoRow label="Condición" value={vehicle.condicion} /><InfoRow label="Transmisión" value={vehicle.transmision} />
-            <InfoRow label="Combustible" value={vehicle.combustible} /><InfoRow label="Color exterior" value={vehicle.color_exterior} /><InfoRow label="Color interior" value={vehicle.color_interior} />
-            <InfoRow label="Kilometraje" value={vehicle.kilometraje} /><InfoRow label="Cilindraje" value={vehicle.cilindraje} /><InfoRow label="Tracción" value={vehicle.traccion} />
-            <InfoRow label="Sector" value={vehicle.sector} /><InfoRow label="Vendedor" value={vehicle.vendedor} />
+            <InfoRow label={isEnglish ? 'Make' : 'Marca'} value={vehicle.marca} /><InfoRow label={isEnglish ? 'Model' : 'Modelo'} value={vehicle.modelo} /><InfoRow label={isEnglish ? 'Year' : 'Año'} value={vehicle.año} />
+            <InfoRow label={isEnglish ? 'Type' : 'Tipo'} value={translateVehicleValue(vehicle.tipo, isEnglish)} /><InfoRow label={isEnglish ? 'Condition' : 'Condición'} value={translateVehicleValue(vehicle.condicion, isEnglish)} /><InfoRow label={isEnglish ? 'Transmission' : 'Transmisión'} value={translateVehicleValue(vehicle.transmision, isEnglish)} />
+            <InfoRow label={isEnglish ? 'Fuel' : 'Combustible'} value={translateVehicleValue(vehicle.combustible, isEnglish)} /><InfoRow label={isEnglish ? 'Exterior color' : 'Color exterior'} value={translateVehicleValue(vehicle.color_exterior, isEnglish)} /><InfoRow label={isEnglish ? 'Interior color' : 'Color interior'} value={translateVehicleValue(vehicle.color_interior, isEnglish)} />
+            <InfoRow label={isEnglish ? 'Mileage' : 'Kilometraje'} value={getVisibleMileage(vehicle)} /><InfoRow label={isEnglish ? 'Engine displacement' : 'Cilindraje'} value={vehicle.cilindraje} /><InfoRow label={isEnglish ? 'Drivetrain' : 'Tracción'} value={vehicle.traccion} />
           </View>
         </View>
       </ScrollReveal>
 
-      {!!vehicle.accesorios && <ScrollReveal><FeatureList title="Accesorios y características" value={vehicle.accesorios} /></ScrollReveal>}
-      {!!vehicle.equipamiento && <ScrollReveal><FeatureList title="Equipamiento destacado" value={vehicle.equipamiento} /></ScrollReveal>}
-      {!!vehicle.descripcion && <ScrollReveal><View style={styles.descriptionCard}><Text style={styles.sectionTitle}>Descripción</Text><Text style={styles.description}>{vehicle.descripcion}</Text></View></ScrollReveal>}
-
+      {!!vehicle.accesorios && <ScrollReveal><FeatureList title={isEnglish ? 'Features and accessories' : 'Accesorios y características'} value={vehicle.accesorios} /></ScrollReveal>}
+      {!!vehicle.equipamiento && <ScrollReveal><FeatureList title={isEnglish ? 'Highlighted equipment' : 'Equipamiento destacado'} value={vehicle.equipamiento} /></ScrollReveal>}
       <Modal
         visible={lightboxOpen}
         transparent
@@ -181,7 +197,7 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
               {Math.max(vehicle.fotos.indexOf(selectedPhoto), 0) + 1} / {vehicle.fotos.length}
             </Text>
             <TouchableOpacity
-              accessibilityLabel="Cerrar fotografía ampliada"
+              accessibilityLabel={isEnglish ? 'Close enlarged photo' : 'Cerrar fotografía ampliada'}
               style={styles.lightboxClose}
               onPress={() => setLightboxOpen(false)}
             >
@@ -196,14 +212,14 @@ export function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
           {vehicle.fotos.length > 1 && (
             <>
               <TouchableOpacity
-                accessibilityLabel="Fotografía anterior"
+                accessibilityLabel={isEnglish ? 'Previous photo' : 'Fotografía anterior'}
                 style={[styles.lightboxArrow, styles.lightboxArrowLeft, isMobileWeb && styles.lightboxArrowMobile]}
                 onPress={showPreviousPhoto}
               >
                 <Text style={styles.lightboxArrowText}>‹</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                accessibilityLabel="Fotografía siguiente"
+                accessibilityLabel={isEnglish ? 'Next photo' : 'Fotografía siguiente'}
                 style={[styles.lightboxArrow, styles.lightboxArrowRight, isMobileWeb && styles.lightboxArrowMobile]}
                 onPress={showNextPhoto}
               >
@@ -270,11 +286,10 @@ const styles = StyleSheet.create({
   photoNumber: { position: 'absolute', right: 5, bottom: 4, color: '#fff', backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, fontSize: 10, fontWeight: 'bold' },
   detailsCard: { backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 22, elevation: 2 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 14 },
-  infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, infoItem: { width: 245, flexGrow: 1, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingVertical: 11 },
+  infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, infoItem: { width: 185, flexBasis: 185, flexGrow: 1, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingVertical: 11 },
   label: { color: '#6b7280', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 }, value: { color: '#111827', fontSize: 15, fontWeight: '600' },
   featureCard: { backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 22, elevation: 2 }, featureGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   featureItem: { width: 245, flexGrow: 1, flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#f9fafb', borderRadius: 7, padding: 10 }, check: { color: '#dc2626', fontWeight: 'bold', marginRight: 8 }, featureText: { color: '#374151', flex: 1 },
-  descriptionCard: { backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 22, elevation: 2 }, description: { color: '#4b5563', fontSize: 15, lineHeight: 23 },
   lightboxOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.94)', alignItems: 'center', justifyContent: 'center' },
   lightboxTopBar: { position: 'absolute', top: 18, left: 24, right: 24, zIndex: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   lightboxCounter: { color: '#fff', fontSize: 15, fontWeight: 'bold', backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16 },

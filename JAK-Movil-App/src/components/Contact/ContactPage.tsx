@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Linking } from 'react-native';
 import { ScrollReveal } from '../animation/ScrollReveal';
 
-export function ContactPage() {
+export function ContactPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
+  const isEnglish = language === 'EN';
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -12,15 +13,17 @@ export function ContactPage() {
 
   const handleSendWhatsApp = () => {
     if (!formData.name || !formData.message) {
-      alert('Por favor completa al menos tu nombre y un mensaje.');
+      alert(isEnglish ? 'Please enter at least your name and a message.' : 'Por favor completa al menos tu nombre y un mensaje.');
       return;
     }
 
-    const text = `Hola, mi nombre es ${formData.name}.\nCorreo: ${formData.email}\nTeléfono: ${formData.phone}\n\nMensaje: ${formData.message}`;
+    const text = isEnglish
+      ? `Hello, my name is ${formData.name}.\nEmail: ${formData.email}\nPhone: ${formData.phone}\n\nMessage: ${formData.message}`
+      : `Hola, mi nombre es ${formData.name}.\nCorreo: ${formData.email}\nTeléfono: ${formData.phone}\n\nMensaje: ${formData.message}`;
     const url = `https://wa.me/18496522611?text=${encodeURIComponent(text)}`; // Cambiar por el número de Rosibel Auto Sales Services
     
     Linking.openURL(url).catch(() => {
-      alert('No se pudo abrir WhatsApp');
+      alert(isEnglish ? 'WhatsApp could not be opened' : 'No se pudo abrir WhatsApp');
     });
   };
 
@@ -28,17 +31,17 @@ export function ContactPage() {
     <View style={styles.container}>
       <ScrollReveal style={styles.formReveal}>
         <View style={styles.card}>
-        <Text style={styles.title}>Ponte en Contacto con Nosotros</Text>
+        <Text style={styles.title}>{isEnglish ? 'Contact Us' : 'Ponte en Contacto con Nosotros'}</Text>
         <Text style={styles.subtitle}>
-          ¿Tienes alguna duda o te interesa un vehículo? Escríbenos y te responderemos a la brevedad.
+          {isEnglish ? 'Do you have a question or are you interested in a vehicle? Write to us and we will respond shortly.' : '¿Tienes alguna duda o te interesa un vehículo? Escríbenos y te responderemos a la brevedad.'}
         </Text>
 
         {/* Formulario */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Nombre Completo *</Text>
+          <Text style={styles.label}>{isEnglish ? 'Full Name *' : 'Nombre Completo *'}</Text>
           <TextInput
             style={styles.input}
-            placeholder="Ej: Juan Pérez"
+            placeholder={isEnglish ? 'E.g. John Smith' : 'Ej: Juan Pérez'}
             value={formData.name}
             onChangeText={(text) => setFormData({ ...formData, name: text })}
           />
@@ -46,10 +49,10 @@ export function ContactPage() {
 
         <View style={styles.row}>
           <View style={[styles.formGroup, styles.flex1]}>
-            <Text style={styles.label}>Correo Electrónico</Text>
+            <Text style={styles.label}>{isEnglish ? 'Email Address' : 'Correo Electrónico'}</Text>
             <TextInput
               style={styles.input}
-              placeholder="ejemplo@correo.com"
+              placeholder={isEnglish ? 'example@email.com' : 'ejemplo@correo.com'}
               keyboardType="email-address"
               value={formData.email}
               onChangeText={(text) => setFormData({ ...formData, email: text })}
@@ -57,7 +60,7 @@ export function ContactPage() {
           </View>
 
           <View style={[styles.formGroup, styles.flex1]}>
-            <Text style={styles.label}>Teléfono / WhatsApp</Text>
+            <Text style={styles.label}>{isEnglish ? 'Phone / WhatsApp' : 'Teléfono / WhatsApp'}</Text>
             <TextInput
               style={styles.input}
               placeholder="809-000-0000"
@@ -69,10 +72,10 @@ export function ContactPage() {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Mensaje *</Text>
+          <Text style={styles.label}>{isEnglish ? 'Message *' : 'Mensaje *'}</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
-            placeholder="Escribe tu consulta aquí..."
+            placeholder={isEnglish ? 'Write your message here...' : 'Escribe tu consulta aquí...'}
             multiline
             numberOfLines={4}
             value={formData.message}
@@ -81,7 +84,7 @@ export function ContactPage() {
         </View>
 
         <TouchableOpacity style={styles.sendButton} onPress={handleSendWhatsApp}>
-          <Text style={styles.sendButtonText}>ENVIAR POR WHATSAPP 📲</Text>
+          <Text style={styles.sendButtonText}>{isEnglish ? 'SEND VIA WHATSAPP 📲' : 'ENVIAR POR WHATSAPP 📲'}</Text>
         </TouchableOpacity>
         </View>
       </ScrollReveal>
@@ -90,15 +93,15 @@ export function ContactPage() {
       <ScrollReveal style={styles.infoReveal} delay={90}>
         <View style={styles.infoSection}>
           <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>📍 Ubicación</Text>
-          <Text style={styles.infoText}>Bávaro, La Altagracia, República Dominicana</Text>
+          <Text style={styles.infoTitle}>📍 {isEnglish ? 'Location' : 'Ubicación'}</Text>
+          <Text style={styles.infoText}>{isEnglish ? 'Bávaro, La Altagracia, Dominican Republic' : 'Bávaro, La Altagracia, República Dominicana'}</Text>
           </View>
           <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>📞 Atención Directa</Text>
+          <Text style={styles.infoTitle}>📞 {isEnglish ? 'Direct Assistance' : 'Atención Directa'}</Text>
           <Text style={styles.infoText}>+1 (809) 474-8410</Text>
           </View>
           <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>✉️ Correo Electrónico</Text>
+          <Text style={styles.infoTitle}>✉️ {isEnglish ? 'Email Address' : 'Correo Electrónico'}</Text>
           <Text style={styles.infoText}>contacto@rosybelautosales.com</Text>
           </View>
         </View>

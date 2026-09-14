@@ -2,14 +2,15 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ScrollReveal } from '../animation/ScrollReveal';
 
-export function AboutPage() {
+export function AboutPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
+  const isEnglish = language === 'EN';
   return (
     <View style={styles.container}>
       {/* Banner Principal */}
       <ScrollReveal>
         <View style={styles.heroBanner}>
-          <Text style={styles.heroSubtitle}>CONOCE NUESTRA HISTORIA</Text>
-          <Text style={styles.heroTitle}>Pasión, Trabajo Duro y Pasión por los Autos</Text>
+          <Text style={styles.heroSubtitle}>{isEnglish ? 'DISCOVER OUR STORY' : 'CONOCE NUESTRA HISTORIA'}</Text>
+          <Text style={styles.heroTitle}>{isEnglish ? 'Passion, Hard Work and a Love for Cars' : 'Pasión, Trabajo Duro y Pasión por los Autos'}</Text>
         </View>
       </ScrollReveal>
 
@@ -18,23 +19,23 @@ export function AboutPage() {
         <ScrollReveal>
           <View style={styles.storySection}>
             <View style={styles.textColumn}>
-            <Text style={styles.badge}>NUESTRO FUNDADOR</Text>
+            <Text style={styles.badge}>{isEnglish ? 'OUR FOUNDER' : 'NUESTRO FUNDADOR'}</Text>
             <Text style={styles.sectionTitle}>Bernardo Vásquez Reyes</Text>
             
             <Text style={styles.paragraph}>
-              La historia de <Text style={styles.boldText}>Rosybel Auto Sales</Text> nace del esfuerzo, la dedicación y la pasión por la automoción de su fundador, <Text style={styles.boldText}>Bernardo Vásquez Reyes</Text>.
+              {isEnglish ? 'The story of ' : 'La historia de '}<Text style={styles.boldText}>Rosybel Auto Sales</Text>{isEnglish ? ' began with the hard work, dedication and automotive passion of its founder, ' : ' nace del esfuerzo, la dedicación y la pasión por la automoción de su fundador, '}<Text style={styles.boldText}>Bernardo Vásquez Reyes</Text>.
             </Text>
 
             <Text style={styles.paragraph}>
-              Bernardo inició su trayectoria profesional trabajando como especialista en <Text style={styles.boldText}>desabolladura y pintura de vehículos</Text> en la República Dominicana, un oficio que hasta el día de hoy sigue ejerciendo con maestría. Su amor por los autos y el dominio técnico le permitieron conocer cada detalle, estructura y valor real de un vehículo.
+              {isEnglish ? 'Bernardo began his career as a specialist in ' : 'Bernardo inició su trayectoria profesional trabajando como especialista en '}<Text style={styles.boldText}>{isEnglish ? 'vehicle body repair and painting' : 'desabolladura y pintura de vehículos'}</Text>{isEnglish ? ' in the Dominican Republic, a trade he continues to master today. His love for cars and technical expertise taught him to understand every detail, structure and true value of a vehicle.' : ' en la República Dominicana, un oficio que hasta el día de hoy sigue ejerciendo con maestría. Su amor por los autos y el dominio técnico le permitieron conocer cada detalle, estructura y valor real de un vehículo.'}
             </Text>
 
             <Text style={styles.paragraph}>
-              Tras emigrar a los Estados Unidos, su visión emprendedora tomó más fuerza. Desde allá, aprovechando su experiencia técnica y visión de mercado, comenzó a seleccionar y exportar vehículos de calidad hacia la República Dominicana.
+              {isEnglish ? 'After moving to the United States, his entrepreneurial vision grew stronger. Drawing on his technical experience and market knowledge, he began selecting and exporting quality vehicles to the Dominican Republic.' : 'Tras emigrar a los Estados Unidos, su visión emprendedora tomó más fuerza. Desde allá, aprovechando su experiencia técnica y visión de mercado, comenzó a seleccionar y exportar vehículos de calidad hacia la República Dominicana.'}
             </Text>
 
             <Text style={styles.paragraph}>
-              Hoy, con más de <Text style={styles.boldText}>4 años de trayectoria</Text>, Rosybel Auto Sales se ha consolidado como un dealer de confianza en la zona de Verón - Punta Cana, ofreciendo asesoría transparente y vehículos en óptimas condiciones mecánicas y estéticas.
+              {isEnglish ? 'Today, with more than ' : 'Hoy, con más de '}<Text style={styles.boldText}>{isEnglish ? '4 years of experience' : '4 años de trayectoria'}</Text>{isEnglish ? ', Rosybel Auto Sales has become a trusted dealership in the Verón–Punta Cana area, offering transparent guidance and vehicles in excellent mechanical and cosmetic condition.' : ', Rosybel Auto Sales se ha consolidado como un dealer de confianza en la zona de Verón - Punta Cana, ofreciendo asesoría transparente y vehículos en óptimas condiciones mecánicas y estéticas.'}
             </Text>
             </View>
           </View>
@@ -45,28 +46,25 @@ export function AboutPage() {
           <View style={styles.cardsGrid}>
             <View style={styles.card}>
             <Text style={styles.cardIcon}></Text>
-            <Text style={styles.cardTitle}>NUESTRA MISIÓN</Text>
+            <Text style={styles.cardTitle}>{isEnglish ? 'OUR MISSION' : 'NUESTRA MISIÓN'}</Text>
             <Text style={styles.cardDescription}>
-              Brindar a nuestros clientes en la República Dominicana vehículos de alta calidad, seleccionados e inspeccionados rigurosamente por expertos en la materia.
+              {isEnglish ? 'To provide our customers in the Dominican Republic with high-quality vehicles carefully selected and thoroughly inspected by industry experts.' : 'Brindar a nuestros clientes en la República Dominicana vehículos de alta calidad, seleccionados e inspeccionados rigurosamente por expertos en la materia.'}
             </Text>
             </View>
 
             <View style={styles.card}>
             <Text style={styles.cardIcon}></Text>
-            <Text style={styles.cardTitle}>NUESTRA VISIÓN</Text>
+            <Text style={styles.cardTitle}>{isEnglish ? 'OUR VISION' : 'NUESTRA VISIÓN'}</Text>
             <Text style={styles.cardDescription}>
-              Ser el dealer líder y más confiable de la región Este del país, reconocido por la honestidad, la excelencia en el servicio y la atención personalizada.
+              {isEnglish ? 'To be the leading and most trusted dealership in the eastern region of the country, recognized for honesty, service excellence and personalized attention.' : 'Ser el dealer líder y más confiable de la región Este del país, reconocido por la honestidad, la excelencia en el servicio y la atención personalizada.'}
             </Text>
             </View>
 
             <View style={styles.card}>
             <Text style={styles.cardIcon}></Text>
-            <Text style={styles.cardTitle}>NUESTROS VALORES</Text>
+            <Text style={styles.cardTitle}>{isEnglish ? 'OUR VALUES' : 'NUESTROS VALORES'}</Text>
             <Text style={styles.cardDescription}>
-              • Transparencia y Honestidad{'\n'}
-              • Trabajo y Esfuerzo Constante{'\n'}
-              • Pasión por los Detalles{'\n'}
-              • Compromiso con el Cliente
+              {isEnglish ? '• Transparency and Honesty\n• Consistent Work and Dedication\n• Attention to Detail\n• Commitment to Our Customers' : '• Transparencia y Honestidad\n• Trabajo y Esfuerzo Constante\n• Pasión por los Detalles\n• Compromiso con el Cliente'}
             </Text>
             </View>
           </View>
@@ -77,17 +75,17 @@ export function AboutPage() {
           <View style={styles.statsBanner}>
             <View style={styles.statItem}>
             <Text style={styles.statNumber}>4+</Text>
-            <Text style={styles.statLabel}>Años de Trayectoria</Text>
+            <Text style={styles.statLabel}>{isEnglish ? 'Years of Experience' : 'Años de Trayectoria'}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
             <Text style={styles.statNumber}>100%</Text>
-            <Text style={styles.statLabel}>Inspección Técnica Garantizada</Text>
+            <Text style={styles.statLabel}>{isEnglish ? 'Guaranteed Technical Inspection' : 'Inspección Técnica Garantizada'}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-            <Text style={styles.statNumber}>RD & EE.UU.</Text>
-            <Text style={styles.statLabel}>Conexión Directa de Importación</Text>
+            <Text style={styles.statNumber}>{isEnglish ? 'DR & USA' : 'RD & EE.UU.'}</Text>
+            <Text style={styles.statLabel}>{isEnglish ? 'Direct Import Connection' : 'Conexión Directa de Importación'}</Text>
             </View>
           </View>
         </ScrollReveal>

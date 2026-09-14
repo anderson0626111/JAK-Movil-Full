@@ -24,6 +24,16 @@ import { AdminLogin, AdminPanel, AdminUser } from './components/admin/AdminAcces
 import { ClientPage } from './components/client/ClientPage';
 
 const ADMIN_SESSION_KEY = 'jak-admin-session';
+const EMPTY_SEARCH_FILTERS: SearchFilters = {
+  marca: '',
+  modelo: '',
+  anioDesde: '',
+  anioHasta: '',
+  precioDesde: '',
+  precioHasta: '',
+  moneda: '',
+  orden: 'recientes',
+};
 
 interface ApiVehicle {
   id: number;
@@ -81,6 +91,13 @@ export default function App() {
   >('home');
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
+  const [savedFilters, setSavedFilters] = useState<
+    Record<'results' | 'new' | 'used', SearchFilters>
+  >({
+    results: { ...EMPTY_SEARCH_FILTERS },
+    new: { ...EMPTY_SEARCH_FILTERS },
+    used: { ...EMPTY_SEARCH_FILTERS },
+  });
   const [language, setLanguage] = useState<'ES' | 'EN'>('ES');
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
@@ -121,7 +138,9 @@ export default function App() {
       console.error('Error cargando vehículos:', error);
       setCatalogVehicles([]);
       setSearchMessage(
-        'No fue posible cargar el catálogo. Verifica que MySQL de XAMPP esté activo.'
+        isEnglish
+          ? 'The catalog could not be loaded. Make sure MySQL in XAMPP is running.'
+          : 'No fue posible cargar el catálogo. Verifica que MySQL de XAMPP esté activo.'
       );
     } finally {
       setIsSearching(false);
@@ -171,6 +190,11 @@ export default function App() {
   }, []);
 
   function getSearchMessage(count: number, page: 'results' | 'new' | 'used') {
+    if (isEnglish) {
+      if (page === 'new') return count === 1 ? 'Showing 1 new vehicle' : `Showing ${count} new vehicles`;
+      if (page === 'used') return count === 1 ? 'Showing 1 used vehicle' : `Showing ${count} used vehicles`;
+      return count === 1 ? 'Showing 1 matching vehicle' : `Showing ${count} matching vehicles`;
+    }
     if (page === 'new') return count === 1 ? 'Mostrando 1 vehículo nuevo' : `Mostrando ${count} vehículos nuevos`;
     if (page === 'used') return count === 1 ? 'Mostrando 1 vehículo usado' : `Mostrando ${count} vehículos usados`;
     return count === 1 ? 'Mostrando 1 vehículo encontrado' : `Mostrando ${count} vehículos encontrados`;
@@ -179,6 +203,7 @@ export default function App() {
   async function handleSearch(filters: SearchFilters) {
     try {
       const searchPage = currentPage === 'new' || currentPage === 'used' ? currentPage : 'results';
+      setSavedFilters((current) => ({ ...current, [searchPage]: { ...filters } }));
       navigateTo(searchPage);
       setIsSearching(true);
       setSearchMessage('');
@@ -193,6 +218,7 @@ export default function App() {
       if (filters.precioDesde) query.append('precioDesde', filters.precioDesde);
       if (filters.precioHasta) query.append('precioHasta', filters.precioHasta);
       if (filters.moneda) query.append('moneda', filters.moneda);
+      if (filters.orden) query.append('orden', filters.orden);
       if (condicion) query.append('condicion', condicion);
 
       const url = `${API_URL}/api/vehiculos${
@@ -214,7 +240,9 @@ export default function App() {
       console.error('Error en búsqueda:', error);
       setCatalogVehicles([]);
       setSearchMessage(
-        'No fue posible conectar con la base de datos. Verifica que el backend esté activo.'
+        isEnglish
+          ? 'The database could not be reached. Make sure the backend is running.'
+          : 'No fue posible conectar con la base de datos. Verifica que el backend esté activo.'
       );
     } finally {
       setIsSearching(false);
@@ -243,10 +271,11 @@ export default function App() {
 
   async function loadNewVehicles() {
     try {
+      setSavedFilters((current) => ({ ...current, new: { ...EMPTY_SEARCH_FILTERS } }));
       navigateTo('new');
       setIsSearching(true);
       setSearchMessage('');
-      const response = await fetch(`${API_URL}/api/vehiculos?condicion=Nuevo`);
+      const response = await fetch(`${API_URL}/api/vehiculos?condicion=Nuevo&orden=recientes`);
 
       if (!response.ok) {
         throw new Error('No fue posible cargar los vehículos nuevos');
@@ -256,14 +285,14 @@ export default function App() {
       const results = data.map(mapApiVehicle);
       setCatalogVehicles(results);
       setSearchMessage(
-        results.length === 1
-          ? 'Mostrando 1 vehículo nuevo'
-          : `Mostrando ${results.length} vehículos nuevos`
+        isEnglish
+          ? results.length === 1 ? 'Showing 1 new vehicle' : `Showing ${results.length} new vehicles`
+          : results.length === 1 ? 'Mostrando 1 vehículo nuevo' : `Mostrando ${results.length} vehículos nuevos`
       );
     } catch (error) {
       console.error('Error cargando vehículos nuevos:', error);
       setCatalogVehicles([]);
-      setSearchMessage('No fue posible cargar los vehículos nuevos.');
+      setSearchMessage(isEnglish ? 'The new vehicles could not be loaded.' : 'No fue posible cargar los vehículos nuevos.');
     } finally {
       setIsSearching(false);
     }
@@ -271,10 +300,11 @@ export default function App() {
 
   async function loadUsedVehicles() {
     try {
+      setSavedFilters((current) => ({ ...current, used: { ...EMPTY_SEARCH_FILTERS } }));
       navigateTo('used');
       setIsSearching(true);
       setSearchMessage('');
-      const response = await fetch(`${API_URL}/api/vehiculos?condicion=Usado`);
+      const response = await fetch(`${API_URL}/api/vehiculos?condicion=Usado&orden=recientes`);
 
       if (!response.ok) {
         throw new Error('No fue posible cargar los vehículos usados');
@@ -284,14 +314,14 @@ export default function App() {
       const results = data.map(mapApiVehicle);
       setCatalogVehicles(results);
       setSearchMessage(
-        results.length === 1
-          ? 'Mostrando 1 vehículo usado'
-          : `Mostrando ${results.length} vehículos usados`
+        isEnglish
+          ? results.length === 1 ? 'Showing 1 used vehicle' : `Showing ${results.length} used vehicles`
+          : results.length === 1 ? 'Mostrando 1 vehículo usado' : `Mostrando ${results.length} vehículos usados`
       );
     } catch (error) {
       console.error('Error cargando vehículos usados:', error);
       setCatalogVehicles([]);
-      setSearchMessage('No fue posible cargar los vehículos usados.');
+      setSearchMessage(isEnglish ? 'The used vehicles could not be loaded.' : 'No fue posible cargar los vehículos usados.');
     } finally {
       setIsSearching(false);
     }
@@ -301,6 +331,16 @@ export default function App() {
     currentPage === 'details' || currentPage === 'results'
       ? 'home'
       : currentPage;
+
+  function openHome() {
+    setSavedFilters((current) => ({
+      ...current,
+      results: { ...EMPTY_SEARCH_FILTERS },
+    }));
+    setSelectedVehicleId(null);
+    navigateTo('home');
+    loadAllVehicles();
+  }
 
   function completeAdminLogin(token: string, user: AdminUser, remember: boolean) {
     setAdminToken(token);
@@ -318,8 +358,7 @@ export default function App() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.localStorage.removeItem(ADMIN_SESSION_KEY);
     }
-    navigateTo('home');
-    loadAllVehicles();
+    openHome();
   }
 
   return (
@@ -333,10 +372,7 @@ export default function App() {
         language={language}
         onLanguageChange={setLanguage}
         activePage={activeNavigationPage}
-        onHomePress={() => {
-          navigateTo('home');
-          loadAllVehicles();
-        }}
+        onHomePress={openHome}
         onNewVehiclesPress={loadNewVehicles}
         onUsedVehiclesPress={loadUsedVehicles}
         onAboutPress={() => navigateTo('about')}
@@ -352,24 +388,27 @@ export default function App() {
           language={language}
           onUserUpdated={setAdminUser}
           onLogout={logoutAdmin}
-          onBack={() => {
-            navigateTo('home');
-            loadAllVehicles();
-          }}
+          onBack={openHome}
         />
       ) : currentPage === 'login' ? (
-        <AdminLogin language={language} onAuthenticated={completeAdminLogin} onCancel={() => navigateTo('home')} />
+        <AdminLogin language={language} onAuthenticated={completeAdminLogin} onCancel={openHome} />
       ) : currentPage === 'client' ? (
         <ClientPage language={language} />
       ) : currentPage === 'details' && selectedVehicleId ? (
         <VehicleDetails
           vehicleId={selectedVehicleId}
           onBack={returnToCatalog}
+          language={language}
         />
       ) : currentPage === 'results' || currentPage === 'new' || currentPage === 'used' ? (
         <View style={[styles.content, isMobileWeb && styles.contentMobile]}>
           <View style={styles.filterWrapper}>
-            <FilterPanel onSearch={handleSearch} language={language} condition={currentPage === 'new' ? 'Nuevo' : currentPage === 'used' ? 'Usado' : undefined} />
+            <FilterPanel
+              onSearch={handleSearch}
+              language={language}
+              condition={currentPage === 'new' ? 'Nuevo' : currentPage === 'used' ? 'Usado' : undefined}
+              initialFilters={savedFilters[currentPage]}
+            />
           </View>
           <ScrollReveal style={styles.revealSection}>
             <View style={styles.resultsHeader}>
@@ -393,7 +432,7 @@ export default function App() {
                     delay={(index % 3) * 70}
                     style={isMobileWeb ? styles.catalogItemMobile : undefined}
                   >
-                    <VehicleCard vehicle={vehicle} onPress={() => openVehicleDetails(vehicle.id)} />
+                    <VehicleCard vehicle={vehicle} onPress={() => openVehicleDetails(vehicle.id)} language={language} />
                   </ScrollReveal>
                 ))}
               </View>
@@ -402,21 +441,21 @@ export default function App() {
           )}
         </View>
       ) : currentPage === 'contact' ? (
-        <ContactPage />
+        <ContactPage language={language} />
       ) : currentPage === 'about' ? (
-        <AboutPage />
+        <AboutPage language={language} />
       ) : (
         <>
           <ScrollReveal style={styles.revealSection}>
             <View style={styles.heroSection}>
               <View style={[styles.filterWrapper, isMobileWeb && styles.filterWrapperMobile]}>
-                <FilterPanel onSearch={handleSearch} language={language} />
+                <FilterPanel onSearch={handleSearch} language={language} initialFilters={savedFilters.results} />
               </View>
             </View>
           </ScrollReveal>
 
           <ScrollReveal style={styles.revealSection} delay={80}>
-            <HeroImage onVehiclePress={openVehicleDetails} />
+            <HeroImage onVehiclePress={openVehicleDetails} language={language} />
           </ScrollReveal>
 
           <ScrollReveal style={styles.revealSection} delay={60}>
@@ -426,7 +465,7 @@ export default function App() {
               {isSearching ? (
                 <View style={styles.statusContainer}>
                   <ActivityIndicator size="large" color="#dc2626" />
-                  <Text style={styles.statusText}>Buscando vehículos...</Text>
+                  <Text style={styles.statusText}>{isEnglish ? 'Loading vehicles...' : 'Buscando vehículos...'}</Text>
                 </View>
               ) : (
                 <>
@@ -444,6 +483,7 @@ export default function App() {
                         <VehicleCard
                           vehicle={vehicle}
                           onPress={() => openVehicleDetails(vehicle.id)}
+                          language={language}
                         />
                       </ScrollReveal>
                     ))}
@@ -451,7 +491,7 @@ export default function App() {
 
                   {catalogVehicles.length === 0 && (
                     <Text style={styles.emptyText}>
-                      No encontramos vehículos con esos filtros.
+                      {isEnglish ? 'No vehicles match these filters.' : 'No encontramos vehículos con esos filtros.'}
                     </Text>
                   )}
                 </>
@@ -463,17 +503,11 @@ export default function App() {
 
       <ScrollReveal style={styles.revealSection}>
         <Footer
-          onHomePress={() => {
-            navigateTo('home');
-            loadAllVehicles();
-          }}
+          onHomePress={openHome}
           onNewVehiclesPress={loadNewVehicles}
           onUsedVehiclesPress={loadUsedVehicles}
           onContactPress={() => navigateTo('contact')}
-          onCatalogPress={() => {
-            navigateTo('home');
-            loadAllVehicles();
-          }}
+          onCatalogPress={openHome}
           onAboutPress={() => navigateTo('about')}
           language={language}
         />

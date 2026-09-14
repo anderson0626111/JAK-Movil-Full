@@ -8,6 +8,7 @@ const PDFDocument = require('pdfkit');
 
 const app = express();
 const PORT = 3001;
+const DOP_PER_USD = 60;
 
 const fotoPortadaPorVehiculo = {
   9: '2.jpg',
@@ -553,6 +554,21 @@ function agregarFotos(req, vehiculo) {
   };
 }
 
+function prepararVehiculoPublico(req, vehiculo) {
+  const publico = { ...agregarFotos(req, vehiculo) };
+  delete publico.sector;
+  delete publico.vendedor;
+  delete publico.descripcion;
+
+  if (String(publico.condicion || '').toLowerCase().startsWith('usado')) {
+    const kilometraje = String(publico.kilometraje || '').trim();
+    const valor = Number(kilometraje.replace(/,/g, '').match(/[0-9]+(?:\.[0-9]+)?/)?.[0]);
+    if (kilometraje && Number.isFinite(valor) && valor <= 2) publico.kilometraje = null;
+  }
+
+  return publico;
+}
+
 function validarAnio(valor) {
   if (valor === undefined || valor === '') {
     return null;
@@ -703,10 +719,7 @@ app.get('/api/vehiculos', async (req, res) => {
       parametros.push(monedaPrecio);
     }
 
-    if (precioMinimo !== null && precioMaximo === null) {
-      sql += ' AND precio = ?';
-      parametros.push(precioMinimo.precio);
-    } else if (precioMinimo !== null) {
+    if (precioMinimo !== null) {
       sql += ' AND precio >= ?';
       parametros.push(precioMinimo.precio);
     }
@@ -726,13 +739,31 @@ app.get('/api/vehiculos', async (req, res) => {
       }
     }
 
-    sql += orden === 'recientes'
-      ? ' ORDER BY publicado_en DESC, id DESC'
-      : ' ORDER BY `año` DESC, marca ASC, modelo ASC';
+    const precioComparable = `(CASE WHEN moneda = 'USD' THEN precio * ${DOP_PER_USD} ELSE precio END)`;
+
+    switch (orden) {
+      case 'precio_asc':
+        sql += ` ORDER BY ${precioComparable} ASC, ${yearColumn} DESC`;
+        break;
+      case 'precio_desc':
+        sql += ` ORDER BY ${precioComparable} DESC, ${yearColumn} DESC`;
+        break;
+      case 'anio_asc':
+        sql += ` ORDER BY ${yearColumn} ASC, marca ASC, modelo ASC`;
+        break;
+      case 'anio_desc':
+        sql += ` ORDER BY ${yearColumn} DESC, marca ASC, modelo ASC`;
+        break;
+      case 'recientes':
+        sql += ' ORDER BY publicado_en DESC, id DESC';
+        break;
+      default:
+        sql += ` ORDER BY ${yearColumn} DESC, marca ASC, modelo ASC`;
+    }
 
     const [vehiculos] = await db.query(sql, parametros);
 
-    res.json(vehiculos.map((vehiculo) => agregarFotos(req, vehiculo)));
+    res.json(vehiculos.map((vehiculo) => prepararVehiculoPublico(req, vehiculo)));
   } catch (error) {
     console.error('Error al buscar vehículos:', error);
     res.status(500).json({
@@ -778,7 +809,7 @@ app.get('/api/vehiculos/:id', async (req, res) => {
       });
     }
 
-    res.json(agregarFotos(req, vehiculos[0]));
+    res.json(prepararVehiculoPublico(req, vehiculos[0]));
   } catch (error) {
     console.error('Error al cargar vehículo:', error);
     res.status(500).json({
