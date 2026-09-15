@@ -14,7 +14,7 @@ export interface Vehicle {
   id: string;
   title: string;
   price: string;
-  year: number;
+  year: number | null;
   mileage: string;
   transmission: string;
   fuel: string;
@@ -73,14 +73,14 @@ export function VehicleCard({ vehicle, onPress, language = 'ES' }: VehicleCardPr
         <Text style={styles.title} numberOfLines={1}>
           {vehicle.title}
         </Text>
-        <Text style={styles.yearText}>{isEnglish ? 'Year' : 'Año'}: {vehicle.year}</Text>
+        {vehicle.year && <Text style={styles.yearText}>{isEnglish ? 'Year' : 'Año'}: {vehicle.year}</Text>}
 
         {/* Especificaciones clave */}
-        <View style={styles.specsRow}>
-          <Text style={styles.specItem}> {translateVehicleValue(vehicle.mileage, isEnglish)}</Text>
-          <Text style={styles.specItem}> {translateVehicleValue(vehicle.transmission, isEnglish)}</Text>
-          <Text style={styles.specItem}> {translateVehicleValue(vehicle.fuel, isEnglish)}</Text>
-        </View>
+        {(vehicle.mileage || vehicle.transmission || vehicle.fuel) && <View style={styles.specsRow}>
+          {!!vehicle.mileage && <Text style={styles.specItem}> {translateVehicleValue(vehicle.mileage, isEnglish)}</Text>}
+          {!!vehicle.transmission && <Text style={styles.specItem}> {translateVehicleValue(vehicle.transmission, isEnglish)}</Text>}
+          {!!vehicle.fuel && <Text style={styles.specItem}> {translateVehicleValue(vehicle.fuel, isEnglish)}</Text>}
+        </View>}
 
         {/* Botón de acción */}
         <TouchableOpacity style={styles.button} onPress={onPress}>

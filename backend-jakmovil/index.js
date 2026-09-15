@@ -20,7 +20,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const TOKEN_SECRET = process.env.ADMIN_TOKEN_SECRET || 'cambia-esta-clave-antes-de-produccion';
 const TOKEN_DURATION_MS = 8 * 60 * 60 * 1000;
-const ADMIN_RECOVERY_KEY = process.env.ADMIN_RECOVERY_KEY || 'recuperar1234';
+const PASSWORD_RESET_DURATION_MS = 15 * 60 * 1000;
 const yearColumn = '`a\u00f1o`';
 
 function crearToken(usuario) {
@@ -49,16 +49,29 @@ function leerToken(token) {
   }
 }
 
-function requireAdmin(req, res, next) {
+async function requireAdmin(req, res, next) {
   const [tipo, token] = String(req.headers.authorization || '').split(' ');
-  const usuario = tipo === 'Bearer' ? leerToken(token) : null;
+  const tokenUsuario = tipo === 'Bearer' ? leerToken(token) : null;
 
-  if (!usuario || !['admin', 'empleado'].includes(usuario.rol)) {
+  if (!tokenUsuario || !['admin', 'empleado'].includes(tokenUsuario.rol)) {
     return res.status(401).json({ error: 'Acceso requerido' });
   }
 
-  req.usuario = usuario;
-  next();
+  try {
+    const [usuarios] = await db.query(
+      'SELECT id, nombre, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1',
+      [tokenUsuario.id]
+    );
+    const usuario = usuarios[0];
+    if (!usuario || !usuario.activo || !['admin', 'empleado'].includes(usuario.rol)) {
+      return res.status(401).json({ error: 'La cuenta no esta activa' });
+    }
+    req.usuario = usuario;
+    next();
+  } catch (error) {
+    console.error('Error validando la sesion:', error);
+    res.status(500).json({ error: 'No fue posible validar la sesion' });
+  }
 }
 
 function requireAdminOnly(req, res, next) {
@@ -81,24 +94,75 @@ function crearHashContrasena(contrasena) {
   return `${sal}:${crypto.scryptSync(contrasena, sal, 64).toString('hex')}`;
 }
 
-function validarVehiculo(datos) {
-  const requerido = ['marca', 'modelo', 'anio', 'precio', 'moneda', 'tipo', 'transmision', 'combustible'];
-  const faltante = requerido.find((campo) => datos[campo] === undefined || String(datos[campo]).trim() === '');
-  const anio = Number(datos.anio);
-  const precio = Number(datos.precio);
+function esCorreoValido(valor) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(valor || '').trim());
+}
 
-  if (faltante || !Number.isInteger(anio) || anio < 1900 || anio > 2100 || !Number.isFinite(precio) || precio <= 0 || !['USD', 'DOP'].includes(datos.moneda)) {
+function textoOpcional(valor, maximo = 255) {
+  const texto = String(valor ?? '').trim();
+  return texto ? texto.slice(0, maximo) : null;
+}
+
+function crearHashCodigo(codigo) {
+  return crypto.createHmac('sha256', TOKEN_SECRET).update(String(codigo)).digest('hex');
+}
+
+async function enviarCodigoRecuperacion(destino, codigo) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const remitente = process.env.PASSWORD_RESET_FROM;
+  if (apiKey && remitente) {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: remitente,
+        to: [destino],
+        subject: 'Codigo temporal de acceso a JAK MOVIL',
+        text: `Tu codigo temporal de recuperacion es ${codigo}. Expira en 15 minutos. Si no solicitaste este cambio, ignora este mensaje.`,
+      }),
+    });
+    if (!response.ok) throw new Error('El servicio de correo no pudo enviar el codigo');
+    return true;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('El servicio de recuperacion por correo no esta configurado');
+  }
+  console.log(`[RECUPERACION LOCAL] Codigo para ${destino}: ${codigo}`);
+  return false;
+}
+
+function validarVehiculo(datos) {
+  const marca = String(datos.marca || '').trim();
+  const modelo = String(datos.modelo || '').trim();
+  const anioTexto = String(datos.anio ?? '').trim();
+  const precioTexto = String(datos.precio ?? '').trim();
+  const kilometrajeTexto = String(datos.kilometraje ?? '').trim();
+  const anio = anioTexto ? Number(anioTexto) : null;
+  const precio = precioTexto ? Number(precioTexto) : null;
+
+  if (!marca || !modelo || marca.length > 50 || modelo.length > 50) {
+    return null;
+  }
+  if (anio !== null && (!Number.isInteger(anio) || anio < 1900 || anio > 2100)) {
+    return null;
+  }
+  if (precio !== null && (!Number.isFinite(precio) || precio <= 0)) {
+    return null;
+  }
+  if (kilometrajeTexto && !/^\d+$/.test(kilometrajeTexto)) {
+    return null;
+  }
+  if (!['USD', 'DOP'].includes(datos.moneda || 'USD') || !['Nuevo', 'Usado'].includes(datos.condicion || 'Usado')) {
     return null;
   }
 
   return {
-    marca: String(datos.marca).trim(), modelo: String(datos.modelo).trim(), anio, precio,
-    moneda: datos.moneda, tipo: String(datos.tipo).trim(), transmision: String(datos.transmision).trim(),
-    combustible: String(datos.combustible).trim(), condicion: String(datos.condicion || 'Usado').trim(),
-    color_exterior: datos.color_exterior ? String(datos.color_exterior).trim() : null,
-    kilometraje: datos.kilometraje ? String(datos.kilometraje).trim() : null,
-    accesorios: datos.accesorios ? String(datos.accesorios).trim() : null,
-    descripcion: datos.descripcion ? String(datos.descripcion).trim() : null,
+    marca, modelo, anio, precio, moneda: datos.moneda || 'USD',
+    tipo: textoOpcional(datos.tipo, 30), transmision: textoOpcional(datos.transmision, 30),
+    combustible: textoOpcional(datos.combustible, 30), condicion: datos.condicion || 'Usado',
+    color_exterior: textoOpcional(datos.color_exterior, 50), kilometraje: kilometrajeTexto || null,
+    accesorios: textoOpcional(datos.accesorios, 20000), descripcion: textoOpcional(datos.descripcion, 20000),
   };
 }
 
@@ -109,29 +173,36 @@ async function prepararUsuarios() {
     email VARCHAR(160) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     rol ENUM('admin', 'empleado', 'usuario') NOT NULL DEFAULT 'empleado',
+    activo TINYINT(1) NOT NULL DEFAULT 1,
     debe_cambiar_contrasena TINYINT(1) NOT NULL DEFAULT 0,
     foto_url VARCHAR(500) NULL,
+    correo_recuperacion VARCHAR(160) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY usuarios_email_unique (email)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
   await db.query("ALTER TABLE usuarios MODIFY rol ENUM('admin', 'empleado', 'usuario') NOT NULL DEFAULT 'empleado'");
-  const columnasUsuarios = await db.query(
-    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'debe_cambiar_contrasena'"
+  const [columnasUsuarios] = await db.query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios'"
   );
-  if (!columnasUsuarios[0].length) {
+  const columnas = new Set(columnasUsuarios.map((columna) => columna.COLUMN_NAME));
+  if (!columnas.has('debe_cambiar_contrasena')) {
     await db.query('ALTER TABLE usuarios ADD COLUMN debe_cambiar_contrasena TINYINT(1) NOT NULL DEFAULT 0');
   }
-  const columnasFotoPerfil = await db.query(
-    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'foto_url'"
-  );
-  if (!columnasFotoPerfil[0].length) {
+  if (!columnas.has('foto_url')) {
     await db.query('ALTER TABLE usuarios ADD COLUMN foto_url VARCHAR(500) NULL');
+  }
+  if (!columnas.has('activo')) {
+    await db.query('ALTER TABLE usuarios ADD COLUMN activo TINYINT(1) NOT NULL DEFAULT 1');
+  }
+  if (!columnas.has('correo_recuperacion')) {
+    await db.query('ALTER TABLE usuarios ADD COLUMN correo_recuperacion VARCHAR(160) NULL');
+    await db.query('CREATE UNIQUE INDEX usuarios_correo_recuperacion_unique ON usuarios (correo_recuperacion)');
   }
 
   await db.query(
-    'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, \'admin\') ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), rol = \'admin\'',
+    'INSERT INTO usuarios (nombre, email, password_hash, rol, activo) VALUES (?, ?, ?, \'admin\', 1) ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), rol = \'admin\', activo = 1',
     ['Administrador General', 'admin', crearHashContrasena('1234')]
   );
 }
@@ -152,7 +223,7 @@ async function prepararSolicitudes() {
 async function prepararVentas() {
   await db.query(`CREATE TABLE IF NOT EXISTS ventas_clientes (
     id INT NOT NULL AUTO_INCREMENT,
-    vehiculo_id INT NOT NULL,
+    vehiculo_id INT NULL,
     vehiculo VARCHAR(180) NOT NULL,
     nombre VARCHAR(120) NOT NULL,
     apellido VARCHAR(120) NOT NULL,
@@ -161,6 +232,29 @@ async function prepararVentas() {
     vendido_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+}
+
+async function prepararRecuperacionContrasenas() {
+  await db.query(`CREATE TABLE IF NOT EXISTS recuperacion_contrasenas (
+    usuario_id INT NOT NULL,
+    codigo_hash CHAR(64) NOT NULL,
+    expira_en DATETIME NOT NULL,
+    intentos TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (usuario_id),
+    CONSTRAINT fk_recuperacion_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+}
+
+async function prepararRelaciones() {
+  await db.query('ALTER TABLE ventas_clientes MODIFY vehiculo_id INT NULL');
+  await db.query('UPDATE ventas_clientes venta LEFT JOIN vehiculos vehiculo ON vehiculo.id = venta.vehiculo_id SET venta.vehiculo_id = NULL WHERE venta.vehiculo_id IS NOT NULL AND vehiculo.id IS NULL');
+  const [relaciones] = await db.query(
+    "SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'ventas_clientes' AND CONSTRAINT_NAME = 'fk_ventas_vehiculo'"
+  );
+  if (!relaciones.length) {
+    await db.query('ALTER TABLE ventas_clientes ADD CONSTRAINT fk_ventas_vehiculo FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE SET NULL ON UPDATE CASCADE');
+  }
 }
 
 async function prepararInventario() {
@@ -179,6 +273,12 @@ async function prepararInventario() {
     await db.query('ALTER TABLE vehiculos ADD COLUMN publicado_en DATETIME NULL');
     await db.query('UPDATE vehiculos SET publicado_en = NOW() WHERE publicado_en IS NULL');
   }
+  await db.query(`ALTER TABLE vehiculos
+    MODIFY ${yearColumn} INT NULL,
+    MODIFY precio DECIMAL(10,2) NULL,
+    MODIFY tipo VARCHAR(30) NULL,
+    MODIFY transmision VARCHAR(30) NULL,
+    MODIFY combustible VARCHAR(30) NULL`);
 }
 
 app.post('/api/auth/login', async (req, res) => {
@@ -186,7 +286,7 @@ app.post('/api/auth/login', async (req, res) => {
     const email = String(req.body.email || req.body.usuario || '').trim().toLowerCase();
     const contrasena = String(req.body.contrasena || '');
     const [usuarios] = await db.query(
-      'SELECT id, nombre, email, password_hash, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE email = ? LIMIT 1',
+      'SELECT id, nombre, email, password_hash, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE email = ? LIMIT 1',
       [email]
     );
     const usuario = usuarios[0];
@@ -195,16 +295,13 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(404).json({ error: 'Este usuario no existe' });
     }
 
-    const esClaveRecuperacion = usuario.email === 'admin' && usuario.rol === 'admin' && contrasena === ADMIN_RECOVERY_KEY;
     const contrasenaCorrecta = verificarContrasena(contrasena, usuario.password_hash);
 
-    if (!['admin', 'empleado'].includes(usuario.rol) || (!contrasenaCorrecta && !esClaveRecuperacion)) {
-      return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
+    if (!usuario.activo) {
+      return res.status(403).json({ error: 'Tu acceso esta pendiente de aprobacion por un administrador' });
     }
-
-    if (esClaveRecuperacion) {
-      await db.query('UPDATE usuarios SET debe_cambiar_contrasena = 1 WHERE id = ?', [usuario.id]);
-      usuario.debe_cambiar_contrasena = 1;
+    if (!['admin', 'empleado'].includes(usuario.rol) || !contrasenaCorrecta) {
+      return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
     }
 
     const { password_hash, ...perfil } = usuario;
@@ -221,8 +318,8 @@ app.post('/api/auth/register', async (req, res) => {
     const email = String(req.body.email || req.body.usuario || '').trim().toLowerCase();
     const contrasena = String(req.body.contrasena || '');
 
-    if (!nombre || !email || contrasena.length < 4) {
-      return res.status(400).json({ error: 'Completa nombre, usuario y contraseña' });
+    if (!nombre || !esCorreoValido(email) || contrasena.length < 8) {
+      return res.status(400).json({ error: 'Ingresa nombre, un correo valido y una contraseña de al menos 8 caracteres' });
     }
     if (/\s/.test(email)) {
       return res.status(400).json({ error: 'El usuario no debe contener espacios' });
@@ -230,11 +327,10 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = crearHashContrasena(contrasena);
     const [resultado] = await db.query(
-      'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, \'empleado\')',
-      [nombre, email, passwordHash]
+      'INSERT INTO usuarios (nombre, email, correo_recuperacion, password_hash, rol, activo) VALUES (?, ?, ?, ?, \'empleado\', 0)',
+      [nombre, email, email, passwordHash]
     );
-    const usuario = { id: resultado.insertId, nombre, email, rol: 'empleado' };
-    res.status(201).json({ token: crearToken(usuario), usuario });
+    res.status(201).json({ mensaje: 'Registro recibido. Un administrador debe aprobar el acceso antes de iniciar sesion.', id: resultado.insertId });
   } catch (error) {
     if (error && error.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'Ese usuario ya esta registrado' });
@@ -244,19 +340,103 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+app.post('/api/auth/recuperacion/solicitar', async (req, res) => {
+  try {
+    const identificador = String(req.body.identificador || '').trim().toLowerCase();
+    if (!identificador) return res.status(400).json({ error: 'Ingresa tu usuario o correo' });
+
+    const [usuarios] = await db.query(
+      'SELECT id, email, correo_recuperacion, activo FROM usuarios WHERE LOWER(email) = ? OR LOWER(correo_recuperacion) = ? LIMIT 1',
+      [identificador, identificador]
+    );
+    const usuario = usuarios[0];
+    if (!usuario || !usuario.activo) {
+      return res.json({ mensaje: 'Si la cuenta existe y tiene un correo configurado, recibira un codigo temporal.' });
+    }
+    const destino = esCorreoValido(usuario.correo_recuperacion)
+      ? usuario.correo_recuperacion
+      : (esCorreoValido(usuario.email) ? usuario.email : null);
+    if (!destino) {
+      return res.status(400).json({ error: 'Esta cuenta aun no tiene un correo de recuperacion configurado' });
+    }
+
+    const codigo = String(crypto.randomInt(100000, 1000000));
+    const expiraEn = new Date(Date.now() + PASSWORD_RESET_DURATION_MS);
+    await db.query(
+      `INSERT INTO recuperacion_contrasenas (usuario_id, codigo_hash, expira_en, intentos)
+       VALUES (?, ?, ?, 0)
+       ON DUPLICATE KEY UPDATE codigo_hash = VALUES(codigo_hash), expira_en = VALUES(expira_en), intentos = 0, creado_en = CURRENT_TIMESTAMP`,
+      [usuario.id, crearHashCodigo(codigo), expiraEn]
+    );
+    const enviado = await enviarCodigoRecuperacion(destino, codigo);
+    res.json({
+      mensaje: enviado ? 'Enviamos un codigo temporal a tu correo.' : 'Modo local: utiliza el codigo temporal mostrado debajo.',
+      ...(enviado ? {} : { codigo_temporal: codigo }),
+    });
+  } catch (error) {
+    console.error('Error solicitando recuperacion:', error);
+    res.status(500).json({ error: error.message || 'No fue posible iniciar la recuperacion' });
+  }
+});
+
+app.post('/api/auth/recuperacion/confirmar', async (req, res) => {
+  try {
+    const identificador = String(req.body.identificador || '').trim().toLowerCase();
+    const codigo = String(req.body.codigo || '').trim();
+    const contrasena = String(req.body.contrasena || '');
+    if (!identificador || !/^\d{6}$/.test(codigo) || contrasena.length < 8) {
+      return res.status(400).json({ error: 'Ingresa el codigo de 6 digitos y una contraseña de al menos 8 caracteres' });
+    }
+
+    const [usuarios] = await db.query(
+      'SELECT id FROM usuarios WHERE activo = 1 AND (LOWER(email) = ? OR LOWER(correo_recuperacion) = ?) LIMIT 1',
+      [identificador, identificador]
+    );
+    const usuario = usuarios[0];
+    if (!usuario) return res.status(400).json({ error: 'Codigo invalido o vencido' });
+
+    const [solicitudes] = await db.query(
+      'SELECT codigo_hash, expira_en, intentos FROM recuperacion_contrasenas WHERE usuario_id = ? LIMIT 1',
+      [usuario.id]
+    );
+    const solicitud = solicitudes[0];
+    if (!solicitud || new Date(solicitud.expira_en).getTime() < Date.now() || solicitud.intentos >= 5) {
+      return res.status(400).json({ error: 'Codigo invalido o vencido' });
+    }
+    if (solicitud.codigo_hash !== crearHashCodigo(codigo)) {
+      await db.query('UPDATE recuperacion_contrasenas SET intentos = intentos + 1 WHERE usuario_id = ?', [usuario.id]);
+      return res.status(400).json({ error: 'Codigo invalido o vencido' });
+    }
+
+    await db.query('UPDATE usuarios SET password_hash = ?, debe_cambiar_contrasena = 0 WHERE id = ?', [crearHashContrasena(contrasena), usuario.id]);
+    await db.query('DELETE FROM recuperacion_contrasenas WHERE usuario_id = ?', [usuario.id]);
+    res.json({ mensaje: 'Contraseña actualizada. Ya puedes iniciar sesion.' });
+  } catch (error) {
+    console.error('Error confirmando recuperacion:', error);
+    res.status(500).json({ error: 'No fue posible actualizar la contraseña' });
+  }
+});
+
 app.get('/api/auth/me', requireAdmin, async (req, res) => {
-  const [usuarios] = await db.query('SELECT id, nombre, email, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
-  if (!usuarios[0] || !['admin', 'empleado'].includes(usuarios[0].rol)) return res.status(401).json({ error: 'Sesion no valida' });
-  res.json({ usuario: usuarios[0] });
+  res.json({ usuario: req.usuario });
 });
 
 app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
   try {
     const nombre = String(req.body.nombre || '').trim();
     const contrasena = String(req.body.contrasena || '');
+    const correoRecuperacion = String(req.body.correo_recuperacion || '').trim().toLowerCase();
 
     if (!nombre) return res.status(400).json({ error: 'Ingresa el nombre' });
-    if (contrasena && contrasena.length < 4) return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+    if (contrasena && contrasena.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+    if (correoRecuperacion && !esCorreoValido(correoRecuperacion)) return res.status(400).json({ error: 'Ingresa un correo de recuperacion valido' });
+    if (correoRecuperacion) {
+      const [correoEnUso] = await db.query(
+        'SELECT id FROM usuarios WHERE id <> ? AND (LOWER(email) = ? OR LOWER(correo_recuperacion) = ?) LIMIT 1',
+        [req.usuario.id, correoRecuperacion, correoRecuperacion]
+      );
+      if (correoEnUso.length) return res.status(409).json({ error: 'Ese correo de recuperacion ya pertenece a otra cuenta' });
+    }
 
     const [actuales] = await db.query('SELECT debe_cambiar_contrasena FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
     if (actuales[0]?.debe_cambiar_contrasena && !contrasena) {
@@ -264,12 +444,12 @@ app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
     }
 
     if (contrasena) {
-      await db.query('UPDATE usuarios SET nombre = ?, password_hash = ?, debe_cambiar_contrasena = 0 WHERE id = ?', [nombre, crearHashContrasena(contrasena), req.usuario.id]);
+      await db.query('UPDATE usuarios SET nombre = ?, correo_recuperacion = ?, password_hash = ?, debe_cambiar_contrasena = 0 WHERE id = ?', [nombre, correoRecuperacion || null, crearHashContrasena(contrasena), req.usuario.id]);
     } else {
-      await db.query('UPDATE usuarios SET nombre = ? WHERE id = ?', [nombre, req.usuario.id]);
+      await db.query('UPDATE usuarios SET nombre = ?, correo_recuperacion = ? WHERE id = ?', [nombre, correoRecuperacion || null, req.usuario.id]);
     }
 
-    const [usuarios] = await db.query('SELECT id, nombre, email, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    const [usuarios] = await db.query('SELECT id, nombre, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
     res.json({ mensaje: 'Perfil actualizado.', usuario: usuarios[0] });
   } catch (error) {
     console.error('Error actualizando perfil:', error);
@@ -279,11 +459,26 @@ app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/perfiles', requireAdmin, requireAdminOnly, async (req, res) => {
   try {
-    const [perfiles] = await db.query('SELECT id, nombre, email, rol, foto_url, created_at FROM usuarios ORDER BY created_at DESC, id DESC');
+    const [perfiles] = await db.query('SELECT id, nombre, email, rol, activo, foto_url, correo_recuperacion, created_at FROM usuarios ORDER BY created_at DESC, id DESC');
     res.json({ perfiles });
   } catch (error) {
     console.error('Error cargando perfiles:', error);
     res.status(500).json({ error: 'No fue posible cargar los perfiles' });
+  }
+});
+
+app.patch('/api/admin/perfiles/:id/estado', requireAdmin, requireAdminOnly, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const activo = req.body.activo === true || req.body.activo === 1 ? 1 : 0;
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
+    if (id === req.usuario.id && !activo) return res.status(400).json({ error: 'No puedes desactivar tu propio acceso' });
+    const [resultado] = await db.query('UPDATE usuarios SET activo = ? WHERE id = ?', [activo, id]);
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'Perfil no encontrado' });
+    res.json({ mensaje: activo ? 'Acceso de vendedor aprobado.' : 'Acceso de vendedor desactivado.' });
+  } catch (error) {
+    console.error('Error cambiando estado del perfil:', error);
+    res.status(500).json({ error: 'No fue posible cambiar el estado del acceso' });
   }
 });
 
@@ -307,7 +502,7 @@ app.post('/api/auth/perfil/foto', requireAdmin, async (req, res) => {
 
     const fotoUrl = `${req.protocol}://${req.get('host')}/uploads/perfiles/${archivo}`;
     await db.query('UPDATE usuarios SET foto_url = ? WHERE id = ?', [fotoUrl, req.usuario.id]);
-    const [usuarios] = await db.query('SELECT id, nombre, email, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    const [usuarios] = await db.query('SELECT id, nombre, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
     res.status(201).json({ mensaje: 'Foto de perfil actualizada.', usuario: usuarios[0] });
   } catch (error) {
     console.error('Error subiendo foto de perfil:', error);
@@ -331,7 +526,7 @@ app.delete('/api/auth/perfil/foto', requireAdmin, async (req, res) => {
     }
 
     await db.query('UPDATE usuarios SET foto_url = NULL WHERE id = ?', [req.usuario.id]);
-    const [actualizados] = await db.query('SELECT id, nombre, email, rol, debe_cambiar_contrasena, foto_url FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    const [actualizados] = await db.query('SELECT id, nombre, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
     res.json({ mensaje: 'Foto de perfil eliminada.', usuario: actualizados[0] });
   } catch (error) {
     console.error('Error eliminando foto de perfil:', error);
@@ -359,9 +554,9 @@ app.patch('/api/admin/perfiles/:id/contrasena', requireAdmin, requireAdminOnly, 
     const id = Number(req.params.id);
     const contrasena = String(req.body.contrasena || '');
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
-    if (contrasena.length < 4) return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+    if (contrasena.length < 8) return res.status(400).json({ error: 'La contraseña temporal debe tener al menos 8 caracteres' });
 
-    const [resultado] = await db.query('UPDATE usuarios SET password_hash = ? WHERE id = ?', [crearHashContrasena(contrasena), id]);
+    const [resultado] = await db.query('UPDATE usuarios SET password_hash = ?, debe_cambiar_contrasena = 1 WHERE id = ?', [crearHashContrasena(contrasena), id]);
     if (!resultado.affectedRows) return res.status(404).json({ error: 'Perfil no encontrado' });
     res.json({ mensaje: 'Contraseña restablecida.' });
   } catch (error) {
@@ -448,9 +643,9 @@ app.get('/api/admin/ventas/:id/factura', requireAdmin, async (req, res) => {
     const venta = ventas[0];
     if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
 
-    const fecha = new Date(venta.vendido_en);
-    const formatoFecha = new Intl.DateTimeFormat('es-DO', { dateStyle: 'long', timeStyle: 'short' }).format(fecha);
-    const archivo = `factura-venta-${venta.id}.pdf`;
+    const fechaGeneracion = new Date();
+    const formatoFecha = new Intl.DateTimeFormat('es-DO', { dateStyle: 'long', timeStyle: 'short' }).format(fechaGeneracion);
+    const archivo = `informacion-cliente-${venta.id}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${archivo}"`);
     const doc = new PDFDocument({ size: 'A4', margin: 48 });
@@ -459,10 +654,10 @@ app.get('/api/admin/ventas/:id/factura', requireAdmin, async (req, res) => {
     if (fs.existsSync(logo)) doc.image(logo, 48, 34, { fit: [92, 76] });
     doc.fillColor('#231f20').fontSize(22).font('Helvetica-BoldOblique').text('ROSYBEL AUTO SALES', 154, 46);
     doc.fillColor('#231f20').fontSize(9).font('Helvetica-Bold').text('SERVICES, S.R.L.', 154, 72);
-    doc.fillColor('#374151').fontSize(10).font('Helvetica').text('Factura de venta', 154, 88);
+    doc.fillColor('#374151').fontSize(10).font('Helvetica').text('Ficha informativa de cliente y vehiculo', 154, 88);
     doc.moveTo(48, 112).lineTo(547, 112).strokeColor('#dc2626').stroke();
-    doc.fillColor('#111827').fontSize(17).font('Helvetica-Bold').text(`FACTURA #${venta.id}`, 48, 132);
-    doc.fillColor('#4b5563').fontSize(10).font('Helvetica').text(`Fecha y hora de compra: ${formatoFecha}`, 48, 158);
+    doc.fillColor('#111827').fontSize(17).font('Helvetica-Bold').text(`REGISTRO #${venta.id}`, 48, 132);
+    doc.fillColor('#4b5563').fontSize(10).font('Helvetica').text(`Fecha y hora de generacion del PDF: ${formatoFecha}`, 48, 158);
     doc.fillColor('#111827').fontSize(13).font('Helvetica-Bold').text('Datos del cliente', 48, 202);
     doc.fillColor('#374151').fontSize(11).font('Helvetica').text(`Nombre: ${venta.nombre} ${venta.apellido}`, 48, 226).text(`Cedula: ${venta.cedula}`, 48, 246).text(`Direccion: ${venta.direccion}`, 48, 266, { width: 470 });
     doc.fillColor('#111827').fontSize(13).font('Helvetica-Bold').text('Detalles del vehiculo', 48, 326);
@@ -472,11 +667,11 @@ app.get('/api/admin/ventas/:id/factura', requireAdmin, async (req, res) => {
     let y = 352;
     detalles.forEach(([etiqueta, valor]) => { doc.fillColor('#6b7280').font('Helvetica-Bold').fontSize(10).text(`${etiqueta}:`, 48, y); doc.fillColor('#111827').font('Helvetica').text(String(valor), 175, y); y += 24; });
     doc.moveTo(48, 566).lineTo(547, 566).strokeColor('#e5e7eb').stroke();
-    doc.fillColor('#6b7280').fontSize(9).text('Gracias por confiar en Rosybel Auto Sales.', 48, 582, { align: 'center', width: 499 });
+    doc.fillColor('#6b7280').fontSize(9).text('Documento informativo generado desde JAK MOVIL. No constituye una factura ni un comprobante de venta.', 48, 582, { align: 'center', width: 499 });
     doc.end();
   } catch (error) {
-    console.error('Error generando factura:', error);
-    if (!res.headersSent) res.status(500).json({ error: 'No fue posible generar la factura' });
+    console.error('Error generando el documento informativo:', error);
+    if (!res.headersSent) res.status(500).json({ error: 'No fue posible generar el documento informativo' });
   }
 });
 
@@ -953,6 +1148,8 @@ app.delete('/api/admin/vehiculos/:id', requireAdmin, async (req, res) => {
 
 Promise.all([prepararUsuarios(), prepararInventario(), prepararSolicitudes(), prepararVentas()])
   .then(async () => {
+    await prepararRecuperacionContrasenas();
+    await prepararRelaciones();
     app.listen(PORT, () => {
     console.log(`Servidor activo en http://localhost:${PORT}`);
     });

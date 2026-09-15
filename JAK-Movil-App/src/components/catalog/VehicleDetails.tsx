@@ -15,8 +15,8 @@ import { API_URL } from '../../config/api';
 import { ScrollReveal } from '../animation/ScrollReveal';
 
 interface ApiVehicle {
-  id: number; marca: string; modelo: string; año: number; precio: number; moneda: string;
-  tipo: string; condicion: string | null; transmision: string; combustible: string;
+  id: number; marca: string; modelo: string; año: number | null; precio: number | null; moneda: string;
+  tipo: string | null; condicion: string | null; transmision: string | null; combustible: string | null;
   imagen: string | null; fotos: string[]; color_exterior: string | null;
   color_interior: string | null; kilometraje: string | null; cilindraje: string | null;
   traccion: string | null; accesorios: string | null; equipamiento: string | null;
@@ -24,7 +24,7 @@ interface ApiVehicle {
 
 interface VehicleDetailsProps { vehicleId: string; onBack: () => void; language?: 'ES' | 'EN'; }
 
-function formatPrice(price: number, currency: string, isEnglish: boolean) {
+function formatPrice(price: number | null, currency: string, isEnglish: boolean) {
   if (!Number(price)) return isEnglish ? 'Contact for price' : 'Consultar precio';
   return `${currency === 'DOP' ? 'RD$' : 'US$'} ${Number(price).toLocaleString('en-US')}`;
 }
@@ -119,7 +119,7 @@ export function VehicleDetails({ vehicleId, onBack, language = 'ES' }: VehicleDe
       <ScrollReveal>
         <TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backButtonText}>← {isEnglish ? 'BACK' : 'VOLVER'}</Text></TouchableOpacity>
         <View style={styles.headingRow}>
-          <View><Text style={[styles.title, isMobileWeb && styles.titleMobile]}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{vehicle.año} · {translateVehicleValue(vehicle.condicion || vehicle.tipo, isEnglish)}</Text></View>
+          <View><Text style={[styles.title, isMobileWeb && styles.titleMobile]}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.subtitle}>{[vehicle.año, translateVehicleValue(vehicle.condicion || vehicle.tipo, isEnglish)].filter(Boolean).join(' · ')}</Text></View>
           <Text style={[styles.price, isMobileWeb && styles.priceMobile]}>{formatPrice(vehicle.precio, vehicle.moneda, isEnglish)}</Text>
         </View>
       </ScrollReveal>

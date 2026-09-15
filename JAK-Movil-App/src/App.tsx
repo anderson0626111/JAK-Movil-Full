@@ -39,17 +39,17 @@ interface ApiVehicle {
   id: number;
   marca: string;
   modelo: string;
-  anio?: number;
-  año?: number;
-  precio: number;
+  anio?: number | null;
+  año?: number | null;
+  precio: number | null;
   moneda: string;
-  tipo: string;
-  transmision: string;
-  combustible: string;
+  tipo: string | null;
+  transmision: string | null;
+  combustible: string | null;
   imagen: string | null;
 }
 
-function formatPrice(price: number, currency: string) {
+function formatPrice(price: number | null, currency: string) {
   if (!Number(price)) return 'Consultar precio';
   const symbol = currency === 'DOP' ? 'RD$' : 'US$';
 
@@ -60,16 +60,16 @@ function formatPrice(price: number, currency: string) {
 }
 
 function mapApiVehicle(vehicle: ApiVehicle): Vehicle {
-  const year = vehicle.anio ?? vehicle.año ?? 0;
+  const year = vehicle.anio ?? vehicle.año ?? null;
 
   return {
     id: String(vehicle.id),
     title: `${vehicle.marca} ${vehicle.modelo}`,
     price: formatPrice(vehicle.precio, vehicle.moneda),
     year,
-    mileage: vehicle.tipo,
-    transmission: vehicle.transmision,
-    fuel: vehicle.combustible,
+    mileage: vehicle.tipo || '',
+    transmission: vehicle.transmision || '',
+    fuel: vehicle.combustible || '',
     imageUrl: vehicle.imagen || '',
   };
 }
@@ -171,7 +171,7 @@ export default function App() {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
     try {
-      const guardada = window.localStorage.getItem(ADMIN_SESSION_KEY);
+      const guardada = window.localStorage.getItem(ADMIN_SESSION_KEY) || window.sessionStorage.getItem(ADMIN_SESSION_KEY);
       if (!guardada) return;
       const sesion = JSON.parse(guardada) as { token?: string };
       if (!sesion.token) throw new Error('Sesion incompleta');
@@ -183,9 +183,10 @@ export default function App() {
           setAdminToken(sesion.token as string);
           setAdminUser(data.usuario);
         })
-        .catch(() => window.localStorage.removeItem(ADMIN_SESSION_KEY));
+        .catch(() => { window.localStorage.removeItem(ADMIN_SESSION_KEY); window.sessionStorage.removeItem(ADMIN_SESSION_KEY); });
     } catch {
       window.localStorage.removeItem(ADMIN_SESSION_KEY);
+      window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
     }
   }, []);
 
@@ -346,8 +347,10 @@ export default function App() {
     setAdminToken(token);
     setAdminUser(user);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (remember) window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token }));
-      else window.localStorage.removeItem(ADMIN_SESSION_KEY);
+      window.localStorage.removeItem(ADMIN_SESSION_KEY);
+      window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+      const storage = remember ? window.localStorage : window.sessionStorage;
+      storage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token }));
     }
     navigateTo('admin');
   }
@@ -357,6 +360,7 @@ export default function App() {
     setAdminUser(null);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.localStorage.removeItem(ADMIN_SESSION_KEY);
+      window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
     }
     openHome();
   }
@@ -378,7 +382,7 @@ export default function App() {
         onAboutPress={() => navigateTo('about')}
         onContactPress={() => navigateTo('contact')}
         onAdminPress={() => adminUser && navigateTo('admin')}
-        isAdmin={adminUser?.rol === 'admin'}
+        isAdmin={Boolean(adminUser && ['admin', 'empleado'].includes(adminUser.rol))}
       />
 
       {currentPage === 'admin' && adminToken && adminUser ? (
