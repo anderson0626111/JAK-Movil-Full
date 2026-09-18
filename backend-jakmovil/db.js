@@ -3,7 +3,7 @@ const mysql = require('mysql2');
 const pool = mysql.createPool({
   host: 'localhost',
   user: 'root',
-  password: '', // Si le pusiste clave a XAMPP, escríbela aquí
+  password: '', // Clave de xampp
   database: 'jak_movil',
   waitForConnections: true,
   connectionLimit: 10,

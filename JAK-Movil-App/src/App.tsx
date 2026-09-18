@@ -26,6 +26,7 @@ import { ClientPage } from './components/client/ClientPage';
 
 const ADMIN_SESSION_KEY = 'jak-admin-session-v2';
 const LEGACY_ADMIN_SESSION_KEY = 'jak-admin-session';
+const ADMIN_CONTEXT_KEY = 'jak-admin-context';
 const EMPTY_SEARCH_FILTERS: SearchFilters = {
   marca: '',
   modelo: '',
@@ -80,13 +81,29 @@ export default function App() {
   const { width } = useWindowDimensions();
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const pageScrollRef = useRef<ScrollView>(null);
+  const initialWebPath = Platform.OS === 'web' && typeof window !== 'undefined'
+    ? window.location.pathname.replace(/\/$/, '')
+    : '';
   const startedFromAdmin = Platform.OS === 'web'
     && typeof window !== 'undefined'
-    && (window.location.pathname.replace(/\/$/, '') === '/admin'
-      || new URLSearchParams(window.location.search).get('admin') === '1');
+    && (initialWebPath === '/admin' || new URLSearchParams(window.location.search).get('admin') === '1');
+  const hasStoredAdminContext = Platform.OS === 'web'
+    && typeof window !== 'undefined'
+    && window.sessionStorage.getItem(ADMIN_CONTEXT_KEY) === '1';
+  const startedPage = startedFromAdmin
+    ? 'login'
+    : initialWebPath === '/contacto'
+      ? 'contact'
+      : initialWebPath === '/nosotros'
+        ? 'about'
+        : initialWebPath === '/vehiculos-nuevos'
+          ? 'new'
+          : initialWebPath === '/vehiculos-usados'
+            ? 'used'
+            : 'home';
   const [currentPage, setCurrentPage] = useState<
     'home' | 'about' | 'contact' | 'client' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
-  >(startedFromAdmin ? 'login' : 'home');
+  >(startedPage);
 
   const [catalogVehicles, setCatalogVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
@@ -107,7 +124,7 @@ export default function App() {
   const [language, setLanguage] = useState<'ES' | 'EN'>('ES');
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
-  const [showAdminNavigation, setShowAdminNavigation] = useState(startedFromAdmin);
+  const [showAdminNavigation, setShowAdminNavigation] = useState(startedFromAdmin || hasStoredAdminContext);
   const isEnglish = language === 'EN';
 
   function scrollToTop() {
@@ -120,7 +137,21 @@ export default function App() {
     page: 'home' | 'about' | 'contact' | 'client' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
   ) {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const destination = page === 'admin' || page === 'login' ? '/admin' : '/';
+      if (page === 'admin' || page === 'login') {
+        window.sessionStorage.setItem(ADMIN_CONTEXT_KEY, '1');
+        setShowAdminNavigation(true);
+      }
+      const destination = page === 'admin' || page === 'login'
+        ? '/admin'
+        : page === 'contact'
+          ? '/contacto'
+          : page === 'about'
+            ? '/nosotros'
+            : page === 'new'
+              ? '/vehiculos-nuevos'
+              : page === 'used'
+                ? '/vehiculos-usados'
+                : '/';
       const current = `${window.location.pathname}${window.location.search}`;
       if (current !== destination) window.history.pushState({}, '', destination);
     }
@@ -160,7 +191,13 @@ export default function App() {
   }
 
   useEffect(() => {
-    loadAllVehicles();
+    if (startedPage === 'new') {
+      loadNewVehicles();
+    } else if (startedPage === 'used') {
+      loadUsedVehicles();
+    } else {
+      loadAllVehicles();
+    }
   }, []);
 
   useEffect(() => {
@@ -173,6 +210,7 @@ export default function App() {
     const adminRequested = path === '/admin' || new URLSearchParams(window.location.search).get('admin') === '1';
 
     if (adminRequested) {
+      window.sessionStorage.setItem(ADMIN_CONTEXT_KEY, '1');
       setShowAdminNavigation(true);
       if (adminToken && ['admin', 'empleado'].includes(adminUser?.rol || '')) {
         setCurrentPage('admin');
@@ -192,6 +230,18 @@ export default function App() {
 
       if (adminRequested) {
         setCurrentPage(adminToken && ['admin', 'empleado'].includes(adminUser?.rol || '') ? 'admin' : 'login');
+      } else if (path === '/contacto') {
+        setSelectedVehicleId(null);
+        setCurrentPage('contact');
+      } else if (path === '/nosotros') {
+        setSelectedVehicleId(null);
+        setCurrentPage('about');
+      } else if (path === '/vehiculos-nuevos') {
+        setSelectedVehicleId(null);
+        loadNewVehicles();
+      } else if (path === '/vehiculos-usados') {
+        setSelectedVehicleId(null);
+        loadUsedVehicles();
       } else {
         setSelectedVehicleId(null);
         setCurrentPage('home');
@@ -209,13 +259,20 @@ export default function App() {
     try {
       const path = window.location.pathname.replace(/\/$/, '');
       const adminRequested = path === '/admin' || new URLSearchParams(window.location.search).get('admin') === '1';
-      if (!adminRequested) return;
 
-      const guardada = window.sessionStorage.getItem(ADMIN_SESSION_KEY)
-        || window.localStorage.getItem(ADMIN_SESSION_KEY);
+      const sesionTemporal = window.sessionStorage.getItem(ADMIN_SESSION_KEY);
+      const almacenamiento = sesionTemporal ? window.sessionStorage : window.localStorage;
+      const guardada = sesionTemporal || window.localStorage.getItem(ADMIN_SESSION_KEY);
       if (!guardada) return;
-      const sesion = JSON.parse(guardada) as { token?: string };
+      const sesion = JSON.parse(guardada) as { token?: string; user?: AdminUser };
       if (!sesion.token) throw new Error('Sesion incompleta');
+
+      if (sesion.user && ['admin', 'empleado'].includes(sesion.user.rol)) {
+        setAdminToken(sesion.token);
+        setAdminUser(sesion.user);
+        setShowAdminNavigation(true);
+        if (adminRequested) setCurrentPage('admin');
+      }
 
       fetch(`${API_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${sesion.token}` } })
         .then(async (response) => {
@@ -223,8 +280,18 @@ export default function App() {
           const data = await response.json();
           setAdminToken(sesion.token as string);
           setAdminUser(data.usuario);
+          setShowAdminNavigation(true);
+          almacenamiento.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token: sesion.token, user: data.usuario }));
+          if (adminRequested) setCurrentPage('admin');
         })
-        .catch(() => { window.localStorage.removeItem(ADMIN_SESSION_KEY); window.sessionStorage.removeItem(ADMIN_SESSION_KEY); });
+        .catch(() => {
+          setAdminToken(null);
+          setAdminUser(null);
+          setShowAdminNavigation(window.sessionStorage.getItem(ADMIN_CONTEXT_KEY) === '1');
+          window.localStorage.removeItem(ADMIN_SESSION_KEY);
+          window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+          if (adminRequested) setCurrentPage('login');
+        });
     } catch {
       window.localStorage.removeItem(ADMIN_SESSION_KEY);
       window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
@@ -392,9 +459,24 @@ export default function App() {
       window.localStorage.removeItem(ADMIN_SESSION_KEY);
       window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
       const storage = remember ? window.localStorage : window.sessionStorage;
-      storage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token }));
+      storage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, user }));
     }
     navigateTo('admin');
+  }
+
+  function updateAdminUser(user: AdminUser) {
+    setAdminUser(user);
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    [window.sessionStorage, window.localStorage].forEach((storage) => {
+      const saved = storage.getItem(ADMIN_SESSION_KEY);
+      if (!saved) return;
+      try {
+        const session = JSON.parse(saved) as { token?: string };
+        if (session.token) storage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token: session.token, user }));
+      } catch {
+        storage.removeItem(ADMIN_SESSION_KEY);
+      }
+    });
   }
 
   function logoutAdmin() {
@@ -432,7 +514,7 @@ export default function App() {
           token={adminToken}
           user={adminUser}
           language={language}
-          onUserUpdated={setAdminUser}
+          onUserUpdated={updateAdminUser}
           onLogout={logoutAdmin}
           onBack={openHome}
         />

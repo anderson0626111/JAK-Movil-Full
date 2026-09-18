@@ -230,9 +230,23 @@ async function prepararUsuarios() {
     await db.query('CREATE UNIQUE INDEX usuarios_cedula_unique ON usuarios (cedula)');
   }
 
+  await db.query(`CREATE TABLE IF NOT EXISTS migraciones_app (
+    clave VARCHAR(120) NOT NULL,
+    aplicada_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (clave)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  const claveMigracionAccesoDirecto = 'activar_empleados_sin_aprobacion_20260918';
+  const [migracionAccesoDirecto] = await db.query(
+    'SELECT clave FROM migraciones_app WHERE clave = ? LIMIT 1',
+    [claveMigracionAccesoDirecto]
+  );
+  if (!migracionAccesoDirecto.length) {
+    await db.query("UPDATE usuarios SET activo = 1 WHERE rol = 'empleado' AND activo = 0");
+    await db.query('INSERT INTO migraciones_app (clave) VALUES (?)', [claveMigracionAccesoDirecto]);
+  }
+
   await db.query(
-    'INSERT INTO usuarios (nombre, email, password_hash, rol, activo) VALUES (?, ?, ?, \'admin\', 1) ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), rol = \'admin\', activo = 1',
-    ['Administrador General', 'admin', crearHashContrasena('1234')]
+    "DELETE FROM usuarios WHERE nombre = 'Administrador General' AND email = 'admin' AND cedula IS NULL"
   );
 }
 
@@ -324,6 +338,78 @@ async function prepararInventario() {
   await db.query("UPDATE vehiculos SET tipo = NULL WHERE tipo IS NOT NULL AND tipo NOT IN ('Sedan', 'Hatchback', 'Jeepeta', 'Camioneta', 'Minivan', 'Coupé', 'Convertible', 'Van')");
 }
 
+app.get('/api/auth/configuracion-inicial', async (req, res) => {
+  try {
+    const [administradores] = await db.query(
+      "SELECT id FROM usuarios WHERE rol = 'admin' LIMIT 1"
+    );
+    res.json({ administrador_configurado: administradores.length > 0 });
+  } catch (error) {
+    console.error('Error comprobando la configuración inicial:', error);
+    res.status(500).json({ error: 'No fue posible comprobar la configuración administrativa' });
+  }
+});
+
+app.post('/api/auth/configuracion-inicial', async (req, res) => {
+  let conexion;
+  let bloqueoAdquirido = false;
+  try {
+    const nombre = String(req.body.nombre || '').trim();
+    const cedula = normalizarCedula(req.body.cedula);
+    const email = String(req.body.correo || req.body.email || '').trim().toLowerCase();
+    const contrasena = String(req.body.contrasena || '');
+
+    if (!nombre || !esCedulaDominicanaValida(cedula) || !esCorreoValido(email) || !esContrasenaSegura(contrasena)) {
+      return res.status(400).json({ error: 'Ingresa nombre, una cédula de 11 dígitos, un correo válido y una contraseña de al menos 8 caracteres con mayúscula, minúscula, número y símbolo' });
+    }
+
+    conexion = await db.getConnection();
+    const [bloqueo] = await conexion.query("SELECT GET_LOCK('jak_movil_configurar_admin', 5) AS adquirido");
+    bloqueoAdquirido = bloqueo[0]?.adquirido === 1;
+    if (!bloqueoAdquirido) {
+      return res.status(503).json({ error: 'La configuración está siendo realizada desde otro dispositivo. Intenta nuevamente.' });
+    }
+
+    const [administradores] = await conexion.query("SELECT id FROM usuarios WHERE rol = 'admin' LIMIT 1");
+    if (administradores.length) {
+      return res.status(409).json({ error: 'El Administrador General ya fue configurado. Utiliza Iniciar sesión.' });
+    }
+
+    const passwordHash = crearHashContrasena(contrasena);
+    const [resultado] = await conexion.query(
+      "INSERT INTO usuarios (nombre, cedula, email, correo_recuperacion, password_hash, rol, activo) VALUES (?, ?, ?, ?, ?, 'admin', 1)",
+      [nombre, cedula, email, email, passwordHash]
+    );
+    const usuario = {
+      id: resultado.insertId,
+      nombre,
+      cedula,
+      email,
+      correo_recuperacion: email,
+      rol: 'admin',
+      activo: 1,
+      debe_cambiar_contrasena: 0,
+      foto_url: null,
+    };
+    res.status(201).json({
+      mensaje: 'Administrador General configurado correctamente.',
+      token: crearToken(usuario),
+      usuario,
+    });
+  } catch (error) {
+    if (error && error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'La cédula o el correo ya están registrados' });
+    }
+    console.error('Error creando el Administrador General:', error);
+    res.status(500).json({ error: 'No fue posible configurar el Administrador General' });
+  } finally {
+    if (conexion) {
+      if (bloqueoAdquirido) await conexion.query("SELECT RELEASE_LOCK('jak_movil_configurar_admin')");
+      conexion.release();
+    }
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const identificador = String(req.body.cedula || req.body.usuario || '').trim().toLowerCase();
@@ -342,7 +428,7 @@ app.post('/api/auth/login', async (req, res) => {
     const contrasenaCorrecta = verificarContrasena(contrasena, usuario.password_hash);
 
     if (!usuario.activo) {
-      return res.status(403).json({ error: 'Tu acceso esta pendiente de aprobacion por un administrador' });
+      return res.status(403).json({ error: 'Tu acceso está desactivado. Contacta al administrador.' });
     }
     if (!['admin', 'empleado'].includes(usuario.rol) || !contrasenaCorrecta) {
       return res.status(401).json({ error: 'Cédula o contraseña incorrectas' });
@@ -382,10 +468,10 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = crearHashContrasena(contrasena);
     const [resultado] = await db.query(
-      'INSERT INTO usuarios (nombre, cedula, email, correo_recuperacion, password_hash, rol, activo) VALUES (?, ?, ?, ?, ?, \'empleado\', 0)',
+      'INSERT INTO usuarios (nombre, cedula, email, correo_recuperacion, password_hash, rol, activo) VALUES (?, ?, ?, ?, ?, \'empleado\', 1)',
       [nombre, cedula, email, email, passwordHash]
     );
-    res.status(201).json({ mensaje: 'Registro recibido. Un administrador debe aprobar el acceso antes de iniciar sesion.', id: resultado.insertId });
+    res.status(201).json({ mensaje: 'Registro completado. Ya puedes iniciar sesión.', id: resultado.insertId });
   } catch (error) {
     if (error && error.code === 'ER_DUP_ENTRY') {
       const duplicateKey = String(error.sqlMessage || error.message || '');
@@ -537,7 +623,7 @@ app.patch('/api/admin/perfiles/:id/estado', requireAdmin, requireAdminOnly, asyn
     if (id === req.usuario.id && !activo) return res.status(400).json({ error: 'No puedes desactivar tu propio acceso' });
     const [resultado] = await db.query('UPDATE usuarios SET activo = ? WHERE id = ?', [activo, id]);
     if (!resultado.affectedRows) return res.status(404).json({ error: 'Perfil no encontrado' });
-    res.json({ mensaje: activo ? 'Acceso de vendedor aprobado.' : 'Acceso de vendedor desactivado.' });
+    res.json({ mensaje: activo ? 'Acceso de vendedor activado.' : 'Acceso de vendedor desactivado.' });
   } catch (error) {
     console.error('Error cambiando estado del perfil:', error);
     res.status(500).json({ error: 'No fue posible cambiar el estado del acceso' });
