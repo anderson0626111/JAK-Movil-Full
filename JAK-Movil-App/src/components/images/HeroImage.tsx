@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Image, Platform, StyleSheet, View, ScrollView, TouchableOpacity, Text, useWindowDimensions } from 'react-native';
 import { vehicles } from '../../data/vehicleData';
+import { API_URL } from '../../config/api';
 
 const CARD_MARGIN = -30;
 
@@ -32,8 +33,34 @@ export function HeroImage({ onVehiclePress, language = 'ES' }: HeroImageProps) {
     0
   );
   const [activeIndex, setActiveIndex] = useState(0);
+  const [carouselVehicles, setCarouselVehicles] = useState<any[]>(vehicles);
   const scrollViewRef = useRef<ScrollView>(null);
-  const carouselVehicles = vehicles;
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_URL}/api/vehiculos/carrusel`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error('No fue posible cargar el carrusel');
+        return response.json();
+      })
+      .then((items) => {
+        if (!active || !Array.isArray(items)) return;
+        setActiveIndex(0);
+        setCarouselVehicles(items.map((item) => ({
+          ...item,
+          title: `${item.marca} ${item.modelo}`,
+          year: item.anio ?? item.año ?? null,
+          fuel: item.combustible || '',
+          transmission: item.transmision || '',
+          imageUrl: item.imagen || '',
+          price: item.precio
+            ? `${item.moneda === 'DOP' ? 'RD$' : 'US$'} ${Number(item.precio).toLocaleString('en-US')}`
+            : (language === 'EN' ? 'Price on request' : 'Consultar precio'),
+        })));
+      })
+      .catch((error) => console.error('Error cargando el carrusel:', error));
+    return () => { active = false; };
+  }, [language]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -67,11 +94,13 @@ export function HeroImage({ onVehiclePress, language = 'ES' }: HeroImageProps) {
   }, [slideInterval]);
 
   const handleNext = () => {
+    if (!carouselVehicles.length) return;
     const nextIndex = (activeIndex + 1) % carouselVehicles.length;
     scrollToIndex(nextIndex);
   };
 
   const handlePrev = () => {
+    if (!carouselVehicles.length) return;
     const prevIndex = (activeIndex - 1 + carouselVehicles.length) % carouselVehicles.length;
     scrollToIndex(prevIndex);
   };
@@ -170,12 +199,12 @@ export function HeroImage({ onVehiclePress, language = 'ES' }: HeroImageProps) {
         </ScrollView>
 
         {/* Botones de navegación */}
-        <TouchableOpacity style={[styles.arrowButton, styles.leftArrow, isMobileWeb && styles.leftArrowMobile]} onPress={handlePrev}>
+        {carouselVehicles.length > 1 && <TouchableOpacity style={[styles.arrowButton, styles.leftArrow, isMobileWeb && styles.leftArrowMobile]} onPress={handlePrev}>
           <Text style={styles.arrowText}>‹</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.arrowButton, styles.rightArrow, isMobileWeb && styles.rightArrowMobile]} onPress={handleNext}>
+        </TouchableOpacity>}
+        {carouselVehicles.length > 1 && <TouchableOpacity style={[styles.arrowButton, styles.rightArrow, isMobileWeb && styles.rightArrowMobile]} onPress={handleNext}>
           <Text style={styles.arrowText}>›</Text>
-        </TouchableOpacity>
+        </TouchableOpacity>}
 
         {/* Dots */}
         <View style={styles.pagination}>
@@ -184,7 +213,7 @@ export function HeroImage({ onVehiclePress, language = 'ES' }: HeroImageProps) {
               key={index}
               style={[
                 styles.dot,
-                activeIndex % carouselVehicles.length === index ? styles.activeDot : styles.inactiveDot,
+                activeIndex === index ? styles.activeDot : styles.inactiveDot,
               ]}
             />
           ))}

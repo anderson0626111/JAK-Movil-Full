@@ -4,7 +4,7 @@ import { Picker } from '@react-native-picker/picker';
 import { API_URL } from '../../config/api';
 
 export interface SearchFilters { marca: string; modelo: string; anioDesde: string; anioHasta: string; precioDesde: string; precioHasta: string; moneda: string; orden: string; }
-interface FilterPanelProps { onSearch: (filters: SearchFilters) => void; language?: 'ES' | 'EN'; condition?: 'Nuevo' | 'Usado'; initialFilters?: Partial<SearchFilters>; }
+interface FilterPanelProps { onSearch: (filters: SearchFilters) => void; language?: 'ES' | 'EN'; condition?: 'Nuevo' | 'Usado'; compact?: boolean; initialFilters?: Partial<SearchFilters>; }
 
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: currentYear + 2 - 1900 }, (_, index) => currentYear + 1 - index);
@@ -13,7 +13,7 @@ const DOP_MAX_PRICE = 5_000_000;
 const DOP_PER_USD = 60;
 const dopPrices = Array.from({ length: DOP_MAX_PRICE / DOP_PRICE_STEP + 1 }, (_, index) => index * DOP_PRICE_STEP);
 
-export function FilterPanel({ onSearch, language = 'ES', condition, initialFilters = {} }: FilterPanelProps) {
+export function FilterPanel({ onSearch, language = 'ES', condition, compact = false, initialFilters = {} }: FilterPanelProps) {
   const { width } = useWindowDimensions();
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const isEnglish = language === 'EN';
@@ -29,7 +29,7 @@ export function FilterPanel({ onSearch, language = 'ES', condition, initialFilte
   const [models, setModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [validationError, setValidationError] = useState('');
-  const isSectionFilter = Boolean(condition);
+  const isSectionFilter = Boolean(condition) || compact;
 
   async function loadFilters(selectedBrand = '') {
     try {

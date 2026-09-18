@@ -5,6 +5,7 @@ import {
   View,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
   Platform,
   useWindowDimensions,
 } from 'react-native';
@@ -23,7 +24,8 @@ import { API_URL } from './config/api';
 import { AdminLogin, AdminPanel, AdminUser } from './components/admin/AdminAccess';
 import { ClientPage } from './components/client/ClientPage';
 
-const ADMIN_SESSION_KEY = 'jak-admin-session';
+const ADMIN_SESSION_KEY = 'jak-admin-session-v2';
+const LEGACY_ADMIN_SESSION_KEY = 'jak-admin-session';
 const EMPTY_SEARCH_FILTERS: SearchFilters = {
   marca: '',
   modelo: '',
@@ -78,9 +80,13 @@ export default function App() {
   const { width } = useWindowDimensions();
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const pageScrollRef = useRef<ScrollView>(null);
+  const startedFromAdmin = Platform.OS === 'web'
+    && typeof window !== 'undefined'
+    && (window.location.pathname.replace(/\/$/, '') === '/admin'
+      || new URLSearchParams(window.location.search).get('admin') === '1');
   const [currentPage, setCurrentPage] = useState<
     'home' | 'about' | 'contact' | 'client' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
-  >('home');
+  >(startedFromAdmin ? 'login' : 'home');
 
   const [catalogVehicles, setCatalogVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
@@ -101,6 +107,7 @@ export default function App() {
   const [language, setLanguage] = useState<'ES' | 'EN'>('ES');
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
+  const [showAdminNavigation, setShowAdminNavigation] = useState(startedFromAdmin);
   const isEnglish = language === 'EN';
 
   function scrollToTop() {
@@ -112,6 +119,11 @@ export default function App() {
   function navigateTo(
     page: 'home' | 'about' | 'contact' | 'client' | 'results' | 'details' | 'new' | 'used' | 'login' | 'admin'
   ) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const destination = page === 'admin' || page === 'login' ? '/admin' : '/';
+      const current = `${window.location.pathname}${window.location.search}`;
+      if (current !== destination) window.history.pushState({}, '', destination);
+    }
     setCurrentPage(page);
     scrollToTop();
   }
@@ -154,10 +166,14 @@ export default function App() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
+    window.localStorage.removeItem(LEGACY_ADMIN_SESSION_KEY);
+    window.sessionStorage.removeItem(LEGACY_ADMIN_SESSION_KEY);
+
     const path = window.location.pathname.replace(/\/$/, '');
     const adminRequested = path === '/admin' || new URLSearchParams(window.location.search).get('admin') === '1';
 
     if (adminRequested) {
+      setShowAdminNavigation(true);
       if (adminToken && ['admin', 'empleado'].includes(adminUser?.rol || '')) {
         setCurrentPage('admin');
       } else {
@@ -170,8 +186,33 @@ export default function App() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
+    const handleHistoryNavigation = () => {
+      const path = window.location.pathname.replace(/\/$/, '');
+      const adminRequested = path === '/admin' || new URLSearchParams(window.location.search).get('admin') === '1';
+
+      if (adminRequested) {
+        setCurrentPage(adminToken && ['admin', 'empleado'].includes(adminUser?.rol || '') ? 'admin' : 'login');
+      } else {
+        setSelectedVehicleId(null);
+        setCurrentPage('home');
+      }
+      scrollToTop();
+    };
+
+    window.addEventListener('popstate', handleHistoryNavigation);
+    return () => window.removeEventListener('popstate', handleHistoryNavigation);
+  }, [adminToken, adminUser]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
     try {
-      const guardada = window.localStorage.getItem(ADMIN_SESSION_KEY) || window.sessionStorage.getItem(ADMIN_SESSION_KEY);
+      const path = window.location.pathname.replace(/\/$/, '');
+      const adminRequested = path === '/admin' || new URLSearchParams(window.location.search).get('admin') === '1';
+      if (!adminRequested) return;
+
+      const guardada = window.sessionStorage.getItem(ADMIN_SESSION_KEY)
+        || window.localStorage.getItem(ADMIN_SESSION_KEY);
       if (!guardada) return;
       const sesion = JSON.parse(guardada) as { token?: string };
       if (!sesion.token) throw new Error('Sesion incompleta');
@@ -346,6 +387,7 @@ export default function App() {
   function completeAdminLogin(token: string, user: AdminUser, remember: boolean) {
     setAdminToken(token);
     setAdminUser(user);
+    setShowAdminNavigation(true);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.localStorage.removeItem(ADMIN_SESSION_KEY);
       window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
@@ -362,7 +404,7 @@ export default function App() {
       window.localStorage.removeItem(ADMIN_SESSION_KEY);
       window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
     }
-    openHome();
+    navigateTo('login');
   }
 
   return (
@@ -381,8 +423,8 @@ export default function App() {
         onUsedVehiclesPress={loadUsedVehicles}
         onAboutPress={() => navigateTo('about')}
         onContactPress={() => navigateTo('contact')}
-        onAdminPress={() => adminUser && navigateTo('admin')}
-        isAdmin={Boolean(adminUser && ['admin', 'empleado'].includes(adminUser.rol))}
+        onAdminPress={() => navigateTo(adminToken && adminUser ? 'admin' : 'login')}
+        isAdmin={showAdminNavigation || Boolean(adminToken && adminUser && ['admin', 'empleado'].includes(adminUser.rol))}
       />
 
       {currentPage === 'admin' && adminToken && adminUser ? (
@@ -395,7 +437,7 @@ export default function App() {
           onBack={openHome}
         />
       ) : currentPage === 'login' ? (
-        <AdminLogin language={language} onAuthenticated={completeAdminLogin} onCancel={openHome} />
+        <AdminLogin language={language} onAuthenticated={completeAdminLogin} />
       ) : currentPage === 'client' ? (
         <ClientPage language={language} />
       ) : currentPage === 'details' && selectedVehicleId ? (
@@ -406,11 +448,17 @@ export default function App() {
         />
       ) : currentPage === 'results' || currentPage === 'new' || currentPage === 'used' ? (
         <View style={[styles.content, isMobileWeb && styles.contentMobile]}>
+          {currentPage === 'results' && (
+            <TouchableOpacity style={styles.backToHomeButton} onPress={openHome}>
+              <Text style={styles.backToHomeText}>← {isEnglish ? 'BACK TO HOME' : 'VOLVER AL INICIO'}</Text>
+            </TouchableOpacity>
+          )}
           <View style={styles.filterWrapper}>
             <FilterPanel
               onSearch={handleSearch}
               language={language}
               condition={currentPage === 'new' ? 'Nuevo' : currentPage === 'used' ? 'Usado' : undefined}
+              compact={currentPage === 'results'}
               initialFilters={savedFilters[currentPage]}
             />
           </View>
@@ -505,17 +553,19 @@ export default function App() {
         </>
       )}
 
-      <ScrollReveal style={styles.revealSection}>
-        <Footer
-          onHomePress={openHome}
-          onNewVehiclesPress={loadNewVehicles}
-          onUsedVehiclesPress={loadUsedVehicles}
-          onContactPress={() => navigateTo('contact')}
-          onCatalogPress={openHome}
-          onAboutPress={() => navigateTo('about')}
-          language={language}
-        />
-      </ScrollReveal>
+      {currentPage !== 'login' && currentPage !== 'admin' && (
+        <ScrollReveal style={styles.revealSection}>
+          <Footer
+            onHomePress={openHome}
+            onNewVehiclesPress={loadNewVehicles}
+            onUsedVehiclesPress={loadUsedVehicles}
+            onContactPress={() => navigateTo('contact')}
+            onCatalogPress={openHome}
+            onAboutPress={() => navigateTo('about')}
+            language={language}
+          />
+        </ScrollReveal>
+      )}
     </ScrollView>
   );
 }
@@ -531,6 +581,20 @@ const styles = StyleSheet.create({
   resultsHeader: {
     width: '100%',
     alignItems: 'center',
+  },
+  backToHomeButton: {
+    alignSelf: 'flex-start',
+    minHeight: 42,
+    justifyContent: 'center',
+    marginBottom: 14,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: '#262626',
+  },
+  backToHomeText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
   },
   heroSection: {
     width: '100%',

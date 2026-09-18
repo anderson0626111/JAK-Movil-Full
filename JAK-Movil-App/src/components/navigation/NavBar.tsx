@@ -6,16 +6,9 @@ import {
   TouchableOpacity,
   Pressable,
   Image,
-  Linking,
   Platform,
   useWindowDimensions,
 } from 'react-native';
-
-const SOCIAL_LINKS = {
-  facebook: 'https://www.facebook.com/',
-  instagram: 'https://www.instagram.com/',
-  x: 'https://x.com/',
-};
 
 interface NavBarProps {
   onHomePress?: () => void;
@@ -46,12 +39,6 @@ export function NavBar({
   const isCompact = width < 900;
   const isMobileWeb = Platform.OS === 'web' && width <= 600;
   const [hoveredLanguage, setHoveredLanguage] = useState<'ES' | 'EN' | null>(null);
-
-  function openSocialNetwork(url: string) {
-    Linking.openURL(url).catch((error) =>
-      console.error('No se pudo abrir la red social:', error)
-    );
-  }
 
   return (
     <View style={styles.headerContainer}>
@@ -89,36 +76,6 @@ export function NavBar({
             isCompact && styles.socialSectionCompact,
           ]}
         >
-          <Text style={styles.socialLabel}>{language === 'ES' ? 'SÍGUENOS' : 'FOLLOW US'}</Text>
-          <View style={styles.socialRow}>
-            <TouchableOpacity
-              accessibilityRole="link"
-              accessibilityLabel="Abrir Facebook"
-              style={styles.socialButton}
-              onPress={() => openSocialNetwork(SOCIAL_LINKS.facebook)}
-            >
-              <Text style={[styles.socialLetter, styles.facebookLetter]}>f</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="link"
-              accessibilityLabel="Abrir Instagram"
-              style={styles.socialButton}
-              onPress={() => openSocialNetwork(SOCIAL_LINKS.instagram)}
-            >
-              <View style={styles.instagramGlyph}>
-                <View style={styles.instagramLens} />
-                <View style={styles.instagramDot} />
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="link"
-              accessibilityLabel="Abrir X"
-              style={styles.socialButton}
-              onPress={() => openSocialNetwork(SOCIAL_LINKS.x)}
-            >
-              <Text style={[styles.socialLetter, styles.xLetter]}>X</Text>
-            </TouchableOpacity>
-          </View>
           <View style={styles.languageSwitcher}>
             <Text style={styles.languageGlobe}>🌐</Text>
             <Pressable
@@ -150,43 +107,43 @@ export function NavBar({
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'home' && styles.activeNavItem]}
             onPress={onHomePress}
           >
-            <Text style={styles.navText}>{language === 'ES' ? 'INICIO' : 'HOME'}</Text>
+            <Text style={[styles.navText, isMobileWeb && styles.navTextMobile]}>{language === 'ES' ? 'INICIO' : 'HOME'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'new' && styles.activeNavItem]}
             onPress={onNewVehiclesPress}
           >
-            <Text style={styles.navText}>{language === 'ES' ? 'VEHÍCULOS NUEVOS' : 'NEW VEHICLES'}</Text>
+            <Text style={[styles.navText, isMobileWeb && styles.navTextMobile]}>{language === 'ES' ? 'VEHÍCULOS NUEVOS' : 'NEW VEHICLES'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'used' && styles.activeNavItem]}
             onPress={onUsedVehiclesPress}
           >
-            <Text style={styles.navText}>{language === 'ES' ? 'VEHÍCULOS USADOS' : 'USED VEHICLES'}</Text>
+            <Text style={[styles.navText, isMobileWeb && styles.navTextMobile]}>{language === 'ES' ? 'VEHÍCULOS USADOS' : 'USED VEHICLES'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'about' && styles.activeNavItem]}
             onPress={onAboutPress}
           >
-            <Text style={styles.navText}>{language === 'ES' ? 'NOSOTROS' : 'ABOUT US'}</Text>
+            <Text style={[styles.navText, isMobileWeb && styles.navTextMobile]}>{language === 'ES' ? 'NOSOTROS' : 'ABOUT US'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'contact' && styles.activeNavItem]}
             onPress={onContactPress}
           >
-            <Text style={styles.navText}>{language === 'ES' ? 'CONTACTO' : 'CONTACT'}</Text>
+            <Text style={[styles.navText, isMobileWeb && styles.navTextMobile]}>{language === 'ES' ? 'CONTACTO' : 'CONTACT'}</Text>
           </TouchableOpacity>
 
           {isAdmin && (
             <TouchableOpacity
-              style={[styles.navItem, isMobileWeb && styles.navItemMobile, activePage === 'admin' && styles.activeNavItem]}
+              style={[styles.navItem, isMobileWeb && styles.navItemMobile, (activePage === 'admin' || activePage === 'login') && styles.activeNavItem]}
               onPress={onAdminPress}
             >
-              <Text style={styles.navText}>{language === 'ES' ? 'ADMINISTRACIÓN' : 'ADMINISTRATION'}</Text>
+              <Text style={[styles.navText, isMobileWeb && styles.navTextMobile]}>{language === 'ES' ? 'ADMINISTRACIÓN' : 'ADMINISTRATION'}</Text>
             </TouchableOpacity>
           )}
 
@@ -374,6 +331,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+  navTextMobile: {
+    fontSize: 10.5,
+    textAlign: 'center',
   },
   languageSwitcher: {
     flexDirection: 'row',

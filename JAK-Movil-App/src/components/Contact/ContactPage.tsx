@@ -4,6 +4,7 @@ import { ScrollReveal } from '../animation/ScrollReveal';
 
 export function ContactPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
   const isEnglish = language === 'EN';
+  const dealerEmail = 'rosybelautosales@gmail.com';
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -24,6 +25,12 @@ export function ContactPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
     
     Linking.openURL(url).catch(() => {
       alert(isEnglish ? 'WhatsApp could not be opened' : 'No se pudo abrir WhatsApp');
+    });
+  };
+
+  const handleSendEmail = () => {
+    Linking.openURL(`mailto:${dealerEmail}?subject=${encodeURIComponent(isEnglish ? 'Vehicle inquiry' : 'Consulta sobre vehículo')}`).catch(() => {
+      alert(isEnglish ? 'Your email application could not be opened' : 'No se pudo abrir la aplicación de correo');
     });
   };
 
@@ -102,7 +109,9 @@ export function ContactPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
           </View>
           <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>✉️ {isEnglish ? 'Email Address' : 'Correo Electrónico'}</Text>
-          <Text style={styles.infoText}>contacto@rosybelautosales.com</Text>
+          <TouchableOpacity accessibilityRole="link" onPress={handleSendEmail}>
+            <Text style={[styles.infoText, styles.emailLink]}>{dealerEmail}</Text>
+          </TouchableOpacity>
           </View>
         </View>
       </ScrollReveal>
@@ -216,5 +225,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
     textAlign: 'center',
+  },
+  emailLink: {
+    color: '#b91c1c',
+    textDecorationLine: 'underline',
+    fontWeight: '600',
   },
 });

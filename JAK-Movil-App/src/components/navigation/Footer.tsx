@@ -21,6 +21,7 @@ export function Footer({
   language = 'ES',
 }: FooterProps) {
   const isEnglish = language === 'EN';
+  const dealerEmail = 'rosybelautosales@gmail.com';
   const handleOpenLink = (url: string) => {
     Linking.openURL(url).catch((err) => console.error("Error al abrir enlace: ", err));
   };
@@ -59,7 +60,9 @@ export function Footer({
           <Text style={styles.sectionTitle}>{isEnglish ? 'Contact' : 'Contacto'}</Text>
           <Text style={styles.contactText}> C/ Almirante #14 Veron, Punta Cana, Republica Dominicana</Text>
           <Text style={styles.contactText}> +1 (809) 474-8410</Text>
-          <Text style={styles.contactText}> contacto@rosybelautosales.com</Text>
+          <TouchableOpacity accessibilityRole="link" onPress={() => handleOpenLink(`mailto:${dealerEmail}`)}>
+            <Text style={[styles.contactText, styles.emailLink]}> {dealerEmail}</Text>
+          </TouchableOpacity>
         </View>
 
       </View>
@@ -136,6 +139,9 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontSize: 14,
     marginBottom: 8,
+  },
+  emailLink: {
+    textDecorationLine: 'underline',
   },
   divider: {
     height: 1,

@@ -10,32 +10,32 @@ export function AboutPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
       <ScrollReveal>
         <View style={styles.heroBanner}>
           <Text style={styles.heroSubtitle}>{isEnglish ? 'DISCOVER OUR STORY' : 'CONOCE NUESTRA HISTORIA'}</Text>
-          <Text style={styles.heroTitle}>{isEnglish ? 'Passion, Hard Work and a Love for Cars' : 'Pasión, Trabajo Duro y Pasión por los Autos'}</Text>
+          <Text style={styles.heroTitle}>{isEnglish ? 'A dealership built on trust and automotive experience' : 'Un dealer construido sobre confianza y experiencia automotriz'}</Text>
         </View>
       </ScrollReveal>
 
       <View style={styles.contentContainer}>
-        {/* Sección Historia / Biografía */}
+        {/* Historia del dealer */}
         <ScrollReveal>
           <View style={styles.storySection}>
             <View style={styles.textColumn}>
-            <Text style={styles.badge}>{isEnglish ? 'OUR FOUNDER' : 'NUESTRO FUNDADOR'}</Text>
-            <Text style={styles.sectionTitle}>Bernardo Vásquez Reyes</Text>
+            <Text style={styles.badge}>{isEnglish ? 'ROSYBEL AUTO SALES' : 'ROSYBEL AUTO SALES'}</Text>
+            <Text style={styles.sectionTitle}>{isEnglish ? 'Our dealership history' : 'La historia de nuestro dealer'}</Text>
             
             <Text style={styles.paragraph}>
-              {isEnglish ? 'The story of ' : 'La historia de '}<Text style={styles.boldText}>Rosybel Auto Sales</Text>{isEnglish ? ' began with the hard work, dedication and automotive passion of its founder, ' : ' nace del esfuerzo, la dedicación y la pasión por la automoción de su fundador, '}<Text style={styles.boldText}>Bernardo Vásquez Reyes</Text>.
+              {isEnglish ? 'Rosybel Auto Sales was created from years of technical automotive experience, hard work and a clear purpose: to help each customer choose a vehicle with confidence.' : 'Rosybel Auto Sales nació de años de experiencia técnica en el sector automotriz, trabajo constante y un propósito claro: ayudar a cada cliente a elegir su vehículo con confianza.'}
             </Text>
 
             <Text style={styles.paragraph}>
-              {isEnglish ? 'Bernardo began his career as a specialist in ' : 'Bernardo inició su trayectoria profesional trabajando como especialista en '}<Text style={styles.boldText}>{isEnglish ? 'vehicle body repair and painting' : 'desabolladura y pintura de vehículos'}</Text>{isEnglish ? ' in the Dominican Republic, a trade he continues to master today. His love for cars and technical expertise taught him to understand every detail, structure and true value of a vehicle.' : ' en la República Dominicana, un oficio que hasta el día de hoy sigue ejerciendo con maestría. Su amor por los autos y el dominio técnico le permitieron conocer cada detalle, estructura y valor real de un vehículo.'}
+              {isEnglish ? 'The dealership began with a small, carefully selected inventory and a commitment to offering clear information and personal guidance. As customer trust grew, the variety of vehicles and available services expanded.' : 'El dealer inició con un inventario reducido y cuidadosamente seleccionado, acompañado de un compromiso con la información clara y la atención personalizada. A medida que creció la confianza de sus clientes, también se amplió la variedad de vehículos y servicios disponibles.'}
             </Text>
 
             <Text style={styles.paragraph}>
-              {isEnglish ? 'After moving to the United States, his entrepreneurial vision grew stronger. Drawing on his technical experience and market knowledge, he began selecting and exporting quality vehicles to the Dominican Republic.' : 'Tras emigrar a los Estados Unidos, su visión emprendedora tomó más fuerza. Desde allá, aprovechando su experiencia técnica y visión de mercado, comenzó a seleccionar y exportar vehículos de calidad hacia la República Dominicana.'}
+              {isEnglish ? 'The business later strengthened its connection with the United States, expanding its ability to identify, select and import quality vehicles for customers in the Dominican Republic.' : 'Más adelante, el negocio fortaleció su conexión con los Estados Unidos, ampliando su capacidad para identificar, seleccionar e importar vehículos de calidad destinados a clientes de la República Dominicana.'}
             </Text>
 
             <Text style={styles.paragraph}>
-              {isEnglish ? 'Today, with more than ' : 'Hoy, con más de '}<Text style={styles.boldText}>{isEnglish ? '4 years of experience' : '4 años de trayectoria'}</Text>{isEnglish ? ', Rosybel Auto Sales has become a trusted dealership in the Verón–Punta Cana area, offering transparent guidance and vehicles in excellent mechanical and cosmetic condition.' : ', Rosybel Auto Sales se ha consolidado como un dealer de confianza en la zona de Verón - Punta Cana, ofreciendo asesoría transparente y vehículos en óptimas condiciones mecánicas y estéticas.'}
+              {isEnglish ? 'Today, with more than ' : 'Actualmente, con más de '}<Text style={styles.boldText}>{isEnglish ? '4 years of experience' : '4 años de trayectoria'}</Text>{isEnglish ? ', Rosybel Auto Sales serves the Verón–Punta Cana area with personalized guidance, transparent information and vehicles selected according to mechanical and cosmetic quality standards.' : ', Rosybel Auto Sales atiende la zona de Verón–Punta Cana con asesoría personalizada, información transparente y vehículos seleccionados bajo criterios de calidad mecánica y estética.'}
             </Text>
             </View>
           </View>

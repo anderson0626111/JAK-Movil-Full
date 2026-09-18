@@ -9,6 +9,8 @@ const PDFDocument = require('pdfkit');
 const app = express();
 const PORT = 3001;
 const DOP_PER_USD = 60;
+const VEHICLE_TYPES = ['Sedan', 'Hatchback', 'Jeepeta', 'Camioneta', 'Minivan', 'Coupé', 'Convertible', 'Van'];
+const FUEL_TYPES = ['Gasolina', 'Diésel', 'Híbrido', 'Eléctrico', 'Gas/GLP'];
 
 const fotoPortadaPorVehiculo = {
   9: '2.jpg',
@@ -25,7 +27,7 @@ const yearColumn = '`a\u00f1o`';
 
 function crearToken(usuario) {
   const contenido = Buffer.from(
-    JSON.stringify({ id: usuario.id, email: usuario.email, rol: usuario.rol, exp: Date.now() + TOKEN_DURATION_MS })
+    JSON.stringify({ id: usuario.id, cedula: usuario.cedula, rol: usuario.rol, exp: Date.now() + TOKEN_DURATION_MS })
   ).toString('base64url');
   const firma = crypto.createHmac('sha256', TOKEN_SECRET).update(contenido).digest('base64url');
   return `${contenido}.${firma}`;
@@ -59,7 +61,7 @@ async function requireAdmin(req, res, next) {
 
   try {
     const [usuarios] = await db.query(
-      'SELECT id, nombre, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1',
+      'SELECT id, nombre, cedula, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1',
       [tokenUsuario.id]
     );
     const usuario = usuarios[0];
@@ -96,6 +98,20 @@ function crearHashContrasena(contrasena) {
 
 function esCorreoValido(valor) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(valor || '').trim());
+}
+
+function esContrasenaSegura(valor) {
+  const contrasena = String(valor || '');
+  return contrasena.length >= 8 && /[A-Z]/.test(contrasena) && /[a-z]/.test(contrasena) && /\d/.test(contrasena) && /[^A-Za-z0-9]/.test(contrasena);
+}
+
+function normalizarCedula(valor) {
+  return String(valor || '').replace(/\D/g, '');
+}
+
+function esCedulaDominicanaValida(valor) {
+  const cedula = normalizarCedula(valor);
+  return /^\d{11}$/.test(cedula);
 }
 
 function textoOpcional(valor, maximo = 255) {
@@ -156,12 +172,19 @@ function validarVehiculo(datos) {
   if (!['USD', 'DOP'].includes(datos.moneda || 'USD') || !['Nuevo', 'Usado'].includes(datos.condicion || 'Usado')) {
     return null;
   }
+  const transmision = textoOpcional(datos.transmision, 30);
+  if (transmision && !['Automática', 'Mecánica'].includes(transmision)) return null;
+  const tipo = textoOpcional(datos.tipo, 30);
+  const combustible = textoOpcional(datos.combustible, 30);
+  const colorExterior = textoOpcional(datos.color_exterior, 50);
+  if (tipo && !VEHICLE_TYPES.includes(tipo)) return null;
+  if (combustible && !FUEL_TYPES.includes(combustible)) return null;
+  if (colorExterior && !/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ -]+$/.test(colorExterior)) return null;
 
   return {
     marca, modelo, anio, precio, moneda: datos.moneda || 'USD',
-    tipo: textoOpcional(datos.tipo, 30), transmision: textoOpcional(datos.transmision, 30),
-    combustible: textoOpcional(datos.combustible, 30), condicion: datos.condicion || 'Usado',
-    color_exterior: textoOpcional(datos.color_exterior, 50), kilometraje: kilometrajeTexto || null,
+    tipo, transmision, combustible, condicion: datos.condicion || 'Usado',
+    color_exterior: colorExterior, kilometraje: kilometrajeTexto || null,
     accesorios: textoOpcional(datos.accesorios, 20000), descripcion: textoOpcional(datos.descripcion, 20000),
   };
 }
@@ -170,6 +193,7 @@ async function prepararUsuarios() {
   await db.query(`CREATE TABLE IF NOT EXISTS usuarios (
     id INT NOT NULL AUTO_INCREMENT,
     nombre VARCHAR(100) NOT NULL,
+    cedula VARCHAR(11) NULL,
     email VARCHAR(160) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     rol ENUM('admin', 'empleado', 'usuario') NOT NULL DEFAULT 'empleado',
@@ -179,7 +203,8 @@ async function prepararUsuarios() {
     correo_recuperacion VARCHAR(160) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY usuarios_email_unique (email)
+    UNIQUE KEY usuarios_email_unique (email),
+    UNIQUE KEY usuarios_cedula_unique (cedula)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
   await db.query("ALTER TABLE usuarios MODIFY rol ENUM('admin', 'empleado', 'usuario') NOT NULL DEFAULT 'empleado'");
@@ -199,6 +224,10 @@ async function prepararUsuarios() {
   if (!columnas.has('correo_recuperacion')) {
     await db.query('ALTER TABLE usuarios ADD COLUMN correo_recuperacion VARCHAR(160) NULL');
     await db.query('CREATE UNIQUE INDEX usuarios_correo_recuperacion_unique ON usuarios (correo_recuperacion)');
+  }
+  if (!columnas.has('cedula')) {
+    await db.query('ALTER TABLE usuarios ADD COLUMN cedula VARCHAR(11) NULL AFTER nombre');
+    await db.query('CREATE UNIQUE INDEX usuarios_cedula_unique ON usuarios (cedula)');
   }
 
   await db.query(
@@ -259,7 +288,7 @@ async function prepararRelaciones() {
 
 async function prepararInventario() {
   const columnas = await db.query(
-    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehiculos' AND COLUMN_NAME IN ('estado', 'vendido_en', 'publicado_en')"
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehiculos' AND COLUMN_NAME IN ('estado', 'vendido_en', 'publicado_en', 'historial_venta_visible')"
   );
   const existentes = new Set(columnas[0].map((columna) => columna.COLUMN_NAME));
 
@@ -273,26 +302,41 @@ async function prepararInventario() {
     await db.query('ALTER TABLE vehiculos ADD COLUMN publicado_en DATETIME NULL');
     await db.query('UPDATE vehiculos SET publicado_en = NOW() WHERE publicado_en IS NULL');
   }
+  if (!existentes.has('historial_venta_visible')) {
+    await db.query('ALTER TABLE vehiculos ADD COLUMN historial_venta_visible TINYINT(1) NOT NULL DEFAULT 1');
+  }
   await db.query(`ALTER TABLE vehiculos
     MODIFY ${yearColumn} INT NULL,
     MODIFY precio DECIMAL(10,2) NULL,
     MODIFY tipo VARCHAR(30) NULL,
     MODIFY transmision VARCHAR(30) NULL,
     MODIFY combustible VARCHAR(30) NULL`);
+  await db.query("UPDATE vehiculos SET transmision = NULL WHERE transmision IS NOT NULL AND transmision NOT IN ('Automática', 'Mecánica')");
+  await db.query("UPDATE vehiculos SET combustible = NULL WHERE combustible IS NOT NULL AND combustible NOT IN ('Gasolina', 'Diésel', 'Híbrido', 'Eléctrico', 'Gas/GLP')");
+  await db.query("UPDATE vehiculos SET tipo = 'Jeepeta' WHERE tipo = 'Carro' AND LOWER(CONCAT(COALESCE(marca, ''), ' ', COALESCE(modelo, ''))) LIKE '%countryman%'");
+  await db.query(`UPDATE vehiculos SET tipo = 'Sedan'
+    WHERE (tipo IS NULL OR TRIM(tipo) = '') AND (
+      (marca = 'Mercedes-Benz' AND modelo = 'C300') OR
+      (marca = 'Dodge' AND modelo = 'Avenger') OR
+      (marca = 'Nissan' AND modelo = 'Altima S')
+    )`);
+  await db.query("UPDATE vehiculos SET tipo = 'Convertible' WHERE (tipo IS NULL OR TRIM(tipo) = '') AND marca = 'Chevrolet' AND modelo LIKE 'Corvette%'");
+  await db.query("UPDATE vehiculos SET tipo = NULL WHERE tipo IS NOT NULL AND tipo NOT IN ('Sedan', 'Hatchback', 'Jeepeta', 'Camioneta', 'Minivan', 'Coupé', 'Convertible', 'Van')");
 }
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const email = String(req.body.email || req.body.usuario || '').trim().toLowerCase();
+    const identificador = String(req.body.cedula || req.body.usuario || '').trim().toLowerCase();
+    const cedula = normalizarCedula(identificador);
     const contrasena = String(req.body.contrasena || '');
     const [usuarios] = await db.query(
-      'SELECT id, nombre, email, password_hash, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE email = ? LIMIT 1',
-      [email]
+      'SELECT id, nombre, cedula, email, password_hash, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE cedula = ? OR (cedula IS NULL AND LOWER(email) = ?) LIMIT 1',
+      [cedula, identificador]
     );
     const usuario = usuarios[0];
 
     if (!usuario) {
-      return res.status(404).json({ error: 'Este usuario no existe' });
+      return res.status(401).json({ error: 'Cédula o contraseña incorrectas' });
     }
 
     const contrasenaCorrecta = verificarContrasena(contrasena, usuario.password_hash);
@@ -301,7 +345,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(403).json({ error: 'Tu acceso esta pendiente de aprobacion por un administrador' });
     }
     if (!['admin', 'empleado'].includes(usuario.rol) || !contrasenaCorrecta) {
-      return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
+      return res.status(401).json({ error: 'Cédula o contraseña incorrectas' });
     }
 
     const { password_hash, ...perfil } = usuario;
@@ -315,25 +359,39 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const nombre = String(req.body.nombre || '').trim();
-    const email = String(req.body.email || req.body.usuario || '').trim().toLowerCase();
+    const cedula = normalizarCedula(req.body.cedula);
+    const email = String(req.body.correo || req.body.email || '').trim().toLowerCase();
     const contrasena = String(req.body.contrasena || '');
 
-    if (!nombre || !esCorreoValido(email) || contrasena.length < 8) {
-      return res.status(400).json({ error: 'Ingresa nombre, un correo valido y una contraseña de al menos 8 caracteres' });
+    if (!nombre || !esCedulaDominicanaValida(cedula) || !esCorreoValido(email) || !esContrasenaSegura(contrasena)) {
+      return res.status(400).json({ error: 'Ingresa nombre, una cédula de 11 dígitos, un correo válido y una contraseña de al menos 8 caracteres con mayúscula, minúscula, número y símbolo' });
     }
-    if (/\s/.test(email)) {
-      return res.status(400).json({ error: 'El usuario no debe contener espacios' });
+
+    const [cedulasRegistradas] = await db.query('SELECT id FROM usuarios WHERE cedula = ? LIMIT 1', [cedula]);
+    if (cedulasRegistradas.length) {
+      return res.status(409).json({ error: 'Ese número de cédula ya está registrado' });
+    }
+
+    const [correosRegistrados] = await db.query(
+      'SELECT id FROM usuarios WHERE LOWER(email) = ? OR LOWER(correo_recuperacion) = ? LIMIT 1',
+      [email, email]
+    );
+    if (correosRegistrados.length) {
+      return res.status(409).json({ error: 'Ese correo ya está registrado' });
     }
 
     const passwordHash = crearHashContrasena(contrasena);
     const [resultado] = await db.query(
-      'INSERT INTO usuarios (nombre, email, correo_recuperacion, password_hash, rol, activo) VALUES (?, ?, ?, ?, \'empleado\', 0)',
-      [nombre, email, email, passwordHash]
+      'INSERT INTO usuarios (nombre, cedula, email, correo_recuperacion, password_hash, rol, activo) VALUES (?, ?, ?, ?, ?, \'empleado\', 0)',
+      [nombre, cedula, email, email, passwordHash]
     );
     res.status(201).json({ mensaje: 'Registro recibido. Un administrador debe aprobar el acceso antes de iniciar sesion.', id: resultado.insertId });
   } catch (error) {
     if (error && error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Ese usuario ya esta registrado' });
+      const duplicateKey = String(error.sqlMessage || error.message || '');
+      return res.status(409).json({
+        error: duplicateKey.includes('cedula') ? 'Ese número de cédula ya está registrado' : 'Ese correo ya está registrado',
+      });
     }
     console.error('Error de registro:', error);
     res.status(500).json({ error: 'No fue posible registrar el usuario' });
@@ -342,12 +400,12 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/recuperacion/solicitar', async (req, res) => {
   try {
-    const identificador = String(req.body.identificador || '').trim().toLowerCase();
-    if (!identificador) return res.status(400).json({ error: 'Ingresa tu usuario o correo' });
+    const cedula = String(req.body.identificador || '').trim();
+    if (!/^\d{11}$/.test(cedula)) return res.status(400).json({ error: 'Ingresa un número de cédula de 11 dígitos' });
 
     const [usuarios] = await db.query(
-      'SELECT id, email, correo_recuperacion, activo FROM usuarios WHERE LOWER(email) = ? OR LOWER(correo_recuperacion) = ? LIMIT 1',
-      [identificador, identificador]
+      'SELECT id, cedula, email, correo_recuperacion, activo FROM usuarios WHERE cedula = ? LIMIT 1',
+      [cedula]
     );
     const usuario = usuarios[0];
     if (!usuario || !usuario.activo) {
@@ -381,16 +439,16 @@ app.post('/api/auth/recuperacion/solicitar', async (req, res) => {
 
 app.post('/api/auth/recuperacion/confirmar', async (req, res) => {
   try {
-    const identificador = String(req.body.identificador || '').trim().toLowerCase();
+    const cedula = String(req.body.identificador || '').trim();
     const codigo = String(req.body.codigo || '').trim();
     const contrasena = String(req.body.contrasena || '');
-    if (!identificador || !/^\d{6}$/.test(codigo) || contrasena.length < 8) {
-      return res.status(400).json({ error: 'Ingresa el codigo de 6 digitos y una contraseña de al menos 8 caracteres' });
+    if (!/^\d{11}$/.test(cedula) || !/^\d{6}$/.test(codigo) || !esContrasenaSegura(contrasena)) {
+      return res.status(400).json({ error: 'Ingresa el código de 6 dígitos y una contraseña de al menos 8 caracteres con mayúscula, minúscula, número y símbolo' });
     }
 
     const [usuarios] = await db.query(
-      'SELECT id FROM usuarios WHERE activo = 1 AND (LOWER(email) = ? OR LOWER(correo_recuperacion) = ?) LIMIT 1',
-      [identificador, identificador]
+      'SELECT id FROM usuarios WHERE activo = 1 AND cedula = ? LIMIT 1',
+      [cedula]
     );
     const usuario = usuarios[0];
     if (!usuario) return res.status(400).json({ error: 'Codigo invalido o vencido' });
@@ -424,11 +482,13 @@ app.get('/api/auth/me', requireAdmin, async (req, res) => {
 app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
   try {
     const nombre = String(req.body.nombre || '').trim();
+    const cedula = normalizarCedula(req.body.cedula);
     const contrasena = String(req.body.contrasena || '');
     const correoRecuperacion = String(req.body.correo_recuperacion || '').trim().toLowerCase();
 
     if (!nombre) return res.status(400).json({ error: 'Ingresa el nombre' });
-    if (contrasena && contrasena.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+    if (!esCedulaDominicanaValida(cedula)) return res.status(400).json({ error: 'Ingresa un número de cédula de 11 dígitos' });
+    if (contrasena && !esContrasenaSegura(contrasena)) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres, mayúscula, minúscula, número y símbolo' });
     if (correoRecuperacion && !esCorreoValido(correoRecuperacion)) return res.status(400).json({ error: 'Ingresa un correo de recuperacion valido' });
     if (correoRecuperacion) {
       const [correoEnUso] = await db.query(
@@ -437,6 +497,8 @@ app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
       );
       if (correoEnUso.length) return res.status(409).json({ error: 'Ese correo de recuperacion ya pertenece a otra cuenta' });
     }
+    const [cedulaEnUso] = await db.query('SELECT id FROM usuarios WHERE id <> ? AND cedula = ? LIMIT 1', [req.usuario.id, cedula]);
+    if (cedulaEnUso.length) return res.status(409).json({ error: 'Esa cédula ya pertenece a otra cuenta' });
 
     const [actuales] = await db.query('SELECT debe_cambiar_contrasena FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
     if (actuales[0]?.debe_cambiar_contrasena && !contrasena) {
@@ -444,12 +506,12 @@ app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
     }
 
     if (contrasena) {
-      await db.query('UPDATE usuarios SET nombre = ?, correo_recuperacion = ?, password_hash = ?, debe_cambiar_contrasena = 0 WHERE id = ?', [nombre, correoRecuperacion || null, crearHashContrasena(contrasena), req.usuario.id]);
+      await db.query('UPDATE usuarios SET nombre = ?, cedula = ?, correo_recuperacion = ?, password_hash = ?, debe_cambiar_contrasena = 0 WHERE id = ?', [nombre, cedula, correoRecuperacion || null, crearHashContrasena(contrasena), req.usuario.id]);
     } else {
-      await db.query('UPDATE usuarios SET nombre = ?, correo_recuperacion = ? WHERE id = ?', [nombre, correoRecuperacion || null, req.usuario.id]);
+      await db.query('UPDATE usuarios SET nombre = ?, cedula = ?, correo_recuperacion = ? WHERE id = ?', [nombre, cedula, correoRecuperacion || null, req.usuario.id]);
     }
 
-    const [usuarios] = await db.query('SELECT id, nombre, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    const [usuarios] = await db.query('SELECT id, nombre, cedula, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
     res.json({ mensaje: 'Perfil actualizado.', usuario: usuarios[0] });
   } catch (error) {
     console.error('Error actualizando perfil:', error);
@@ -459,7 +521,7 @@ app.put('/api/auth/perfil', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/perfiles', requireAdmin, requireAdminOnly, async (req, res) => {
   try {
-    const [perfiles] = await db.query('SELECT id, nombre, email, rol, activo, foto_url, correo_recuperacion, created_at FROM usuarios ORDER BY created_at DESC, id DESC');
+    const [perfiles] = await db.query('SELECT id, nombre, cedula, email, rol, activo, foto_url, correo_recuperacion, created_at FROM usuarios ORDER BY created_at DESC, id DESC');
     res.json({ perfiles });
   } catch (error) {
     console.error('Error cargando perfiles:', error);
@@ -502,7 +564,7 @@ app.post('/api/auth/perfil/foto', requireAdmin, async (req, res) => {
 
     const fotoUrl = `${req.protocol}://${req.get('host')}/uploads/perfiles/${archivo}`;
     await db.query('UPDATE usuarios SET foto_url = ? WHERE id = ?', [fotoUrl, req.usuario.id]);
-    const [usuarios] = await db.query('SELECT id, nombre, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    const [usuarios] = await db.query('SELECT id, nombre, cedula, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
     res.status(201).json({ mensaje: 'Foto de perfil actualizada.', usuario: usuarios[0] });
   } catch (error) {
     console.error('Error subiendo foto de perfil:', error);
@@ -526,7 +588,7 @@ app.delete('/api/auth/perfil/foto', requireAdmin, async (req, res) => {
     }
 
     await db.query('UPDATE usuarios SET foto_url = NULL WHERE id = ?', [req.usuario.id]);
-    const [actualizados] = await db.query('SELECT id, nombre, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
+    const [actualizados] = await db.query('SELECT id, nombre, cedula, email, rol, activo, debe_cambiar_contrasena, foto_url, correo_recuperacion FROM usuarios WHERE id = ? LIMIT 1', [req.usuario.id]);
     res.json({ mensaje: 'Foto de perfil eliminada.', usuario: actualizados[0] });
   } catch (error) {
     console.error('Error eliminando foto de perfil:', error);
@@ -554,7 +616,7 @@ app.patch('/api/admin/perfiles/:id/contrasena', requireAdmin, requireAdminOnly, 
     const id = Number(req.params.id);
     const contrasena = String(req.body.contrasena || '');
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
-    if (contrasena.length < 8) return res.status(400).json({ error: 'La contraseña temporal debe tener al menos 8 caracteres' });
+    if (!esContrasenaSegura(contrasena)) return res.status(400).json({ error: 'La contraseña temporal debe tener al menos 8 caracteres, mayúscula, minúscula, número y símbolo' });
 
     const [resultado] = await db.query('UPDATE usuarios SET password_hash = ?, debe_cambiar_contrasena = 1 WHERE id = ?', [crearHashContrasena(contrasena), id]);
     if (!resultado.affectedRows) return res.status(404).json({ error: 'Perfil no encontrado' });
@@ -601,14 +663,15 @@ function validarComprador(datos) {
   const apellido = String(datos.apellido || '').trim();
   const cedula = String(datos.cedula || '').trim();
   const direccion = String(datos.direccion || '').trim();
-  return nombre && apellido && cedula && direccion ? { nombre, apellido, cedula, direccion } : null;
+  return nombre && apellido && /^\d{11}$/.test(cedula) && direccion ? { nombre, apellido, cedula, direccion } : null;
 }
 
 app.put('/api/admin/ventas/:id', requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const comprador = validarComprador(req.body);
-    if (!Number.isInteger(id) || id <= 0 || !comprador) return res.status(400).json({ error: 'Completa los datos del cliente' });
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador inválido' });
+    if (!comprador) return res.status(400).json({ error: 'Completa los datos del cliente e ingresa una cédula de 11 dígitos' });
     const [resultado] = await db.query('UPDATE ventas_clientes SET nombre = ?, apellido = ?, cedula = ?, direccion = ? WHERE id = ?', [comprador.nombre, comprador.apellido, comprador.cedula, comprador.direccion, id]);
     if (!resultado.affectedRows) return res.status(404).json({ error: 'Venta no encontrada' });
     res.json({ mensaje: 'Datos del cliente actualizados.' });
@@ -618,7 +681,7 @@ app.put('/api/admin/ventas/:id', requireAdmin, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/ventas/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/ventas/:id', requireAdmin, requireAdminOnly, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
@@ -631,7 +694,7 @@ app.delete('/api/admin/ventas/:id', requireAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/admin/ventas/:id/factura', requireAdmin, async (req, res) => {
+app.get('/api/admin/ventas/:id/constancia', requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
@@ -645,7 +708,7 @@ app.get('/api/admin/ventas/:id/factura', requireAdmin, async (req, res) => {
 
     const fechaGeneracion = new Date();
     const formatoFecha = new Intl.DateTimeFormat('es-DO', { dateStyle: 'long', timeStyle: 'short' }).format(fechaGeneracion);
-    const archivo = `informacion-cliente-${venta.id}.pdf`;
+    const archivo = 'constancia-venta.pdf';
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${archivo}"`);
     const doc = new PDFDocument({ size: 'A4', margin: 48 });
@@ -654,10 +717,10 @@ app.get('/api/admin/ventas/:id/factura', requireAdmin, async (req, res) => {
     if (fs.existsSync(logo)) doc.image(logo, 48, 34, { fit: [92, 76] });
     doc.fillColor('#231f20').fontSize(22).font('Helvetica-BoldOblique').text('ROSYBEL AUTO SALES', 154, 46);
     doc.fillColor('#231f20').fontSize(9).font('Helvetica-Bold').text('SERVICES, S.R.L.', 154, 72);
-    doc.fillColor('#374151').fontSize(10).font('Helvetica').text('Ficha informativa de cliente y vehiculo', 154, 88);
+    doc.fillColor('#374151').fontSize(10).font('Helvetica').text('Constancia de venta de vehículo', 154, 88);
     doc.moveTo(48, 112).lineTo(547, 112).strokeColor('#dc2626').stroke();
-    doc.fillColor('#111827').fontSize(17).font('Helvetica-Bold').text(`REGISTRO #${venta.id}`, 48, 132);
-    doc.fillColor('#4b5563').fontSize(10).font('Helvetica').text(`Fecha y hora de generacion del PDF: ${formatoFecha}`, 48, 158);
+    doc.fillColor('#111827').fontSize(17).font('Helvetica-Bold').text('CONSTANCIA DE VENTA', 48, 132);
+    doc.fillColor('#4b5563').fontSize(10).font('Helvetica').text(`Fecha y hora de generación: ${formatoFecha}`, 48, 158);
     doc.fillColor('#111827').fontSize(13).font('Helvetica-Bold').text('Datos del cliente', 48, 202);
     doc.fillColor('#374151').fontSize(11).font('Helvetica').text(`Nombre: ${venta.nombre} ${venta.apellido}`, 48, 226).text(`Cedula: ${venta.cedula}`, 48, 246).text(`Direccion: ${venta.direccion}`, 48, 266, { width: 470 });
     doc.fillColor('#111827').fontSize(13).font('Helvetica-Bold').text('Detalles del vehiculo', 48, 326);
@@ -667,7 +730,7 @@ app.get('/api/admin/ventas/:id/factura', requireAdmin, async (req, res) => {
     let y = 352;
     detalles.forEach(([etiqueta, valor]) => { doc.fillColor('#6b7280').font('Helvetica-Bold').fontSize(10).text(`${etiqueta}:`, 48, y); doc.fillColor('#111827').font('Helvetica').text(String(valor), 175, y); y += 24; });
     doc.moveTo(48, 566).lineTo(547, 566).strokeColor('#e5e7eb').stroke();
-    doc.fillColor('#6b7280').fontSize(9).text('Documento informativo generado desde JAK MOVIL. No constituye una factura ni un comprobante de venta.', 48, 582, { align: 'center', width: 499 });
+    doc.fillColor('#6b7280').fontSize(9).text('Comprobante interno de la venta registrada en JAK MOVIL. Este documento no constituye una factura fiscal.', 48, 582, { align: 'center', width: 499 });
     doc.end();
   } catch (error) {
     console.error('Error generando el documento informativo:', error);
@@ -967,6 +1030,20 @@ app.get('/api/vehiculos', async (req, res) => {
   }
 });
 
+// Hasta ocho vehículos disponibles elegidos al azar en cada carga de la portada.
+app.get('/api/vehiculos/carrusel', async (req, res) => {
+  try {
+    const [vehiculos] = await db.query(
+      "SELECT * FROM vehiculos WHERE estado = 'disponible' ORDER BY RAND() LIMIT 8"
+    );
+    res.set('Cache-Control', 'no-store');
+    res.json(vehiculos.map((vehiculo) => prepararVehiculoPublico(req, vehiculo)));
+  } catch (error) {
+    console.error('Error cargando el carrusel:', error);
+    res.status(500).json({ error: 'No fue posible cargar el carrusel' });
+  }
+});
+
 // Fotos de un vehículo. Debe ir antes de la ruta /:id.
 app.get('/api/vehiculos/:id/fotos', (req, res) => {
   const id = Number(req.params.id);
@@ -1101,10 +1178,11 @@ app.patch('/api/admin/vehiculos/:id/vender', requireAdmin, async (req, res) => {
     const cedula = String(req.body.cedula || '').trim();
     const direccion = String(req.body.direccion || '').trim();
     if (!nombre || !apellido || !cedula || !direccion) return res.status(400).json({ error: 'Completa los datos del comprador' });
+    if (!/^\d{11}$/.test(cedula)) return res.status(400).json({ error: 'Ingresa un número de cédula de 11 dígitos' });
     const [vehiculos] = await db.query("SELECT id, marca, modelo FROM vehiculos WHERE id = ? AND estado = 'disponible'", [id]);
     if (!vehiculos[0]) return res.status(404).json({ error: 'Vehiculo no disponible para venta' });
     const [resultado] = await db.query(
-      "UPDATE vehiculos SET estado = 'vendido', vendido_en = NOW() WHERE id = ? AND estado = 'disponible'",
+      "UPDATE vehiculos SET estado = 'vendido', vendido_en = NOW(), historial_venta_visible = 1 WHERE id = ? AND estado = 'disponible'",
       [id]
     );
     if (!resultado.affectedRows) return res.status(404).json({ error: 'Vehiculo no disponible para venta' });
@@ -1130,6 +1208,28 @@ app.patch('/api/admin/vehiculos/:id/cancelar-venta', requireAdmin, async (req, r
   } catch (error) {
     console.error('Error cancelando venta:', error);
     res.status(500).json({ error: 'No fue posible cancelar la venta' });
+  }
+});
+
+app.delete('/api/admin/vehiculos-vendidos/historial', requireAdmin, requireAdminOnly, async (req, res) => {
+  try {
+    const [resultado] = await db.query(
+      `UPDATE vehiculos vehiculo
+       LEFT JOIN ventas_clientes venta ON venta.vehiculo_id = vehiculo.id
+       SET vehiculo.historial_venta_visible = 0
+       WHERE vehiculo.historial_venta_visible = 1
+         AND (vehiculo.estado = 'vendido' OR vehiculo.vendido_en IS NOT NULL OR venta.id IS NOT NULL)`
+    );
+
+    res.json({
+      mensaje: resultado.affectedRows
+        ? `Historial limpiado correctamente. ${resultado.affectedRows} vehículo(s) dejaron de mostrarse en esta sección.`
+        : 'El historial de vehículos vendidos ya estaba vacío.',
+      ocultados: resultado.affectedRows,
+    });
+  } catch (error) {
+    console.error('Error limpiando historial de vendidos:', error);
+    res.status(500).json({ error: 'No fue posible limpiar el historial de vehículos vendidos' });
   }
 });
 
