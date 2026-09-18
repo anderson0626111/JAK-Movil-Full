@@ -451,15 +451,14 @@ export default function App() {
     loadAllVehicles();
   }
 
-  function completeAdminLogin(token: string, user: AdminUser, remember: boolean) {
+  function completeAdminLogin(token: string, user: AdminUser) {
     setAdminToken(token);
     setAdminUser(user);
     setShowAdminNavigation(true);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.localStorage.removeItem(ADMIN_SESSION_KEY);
       window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
-      const storage = remember ? window.localStorage : window.sessionStorage;
-      storage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, user }));
+      window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, user }));
     }
     navigateTo('admin');
   }

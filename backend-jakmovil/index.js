@@ -1281,7 +1281,7 @@ app.patch('/api/admin/vehiculos/:id/vender', requireAdmin, async (req, res) => {
   }
 });
 
-app.patch('/api/admin/vehiculos/:id/cancelar-venta', requireAdmin, async (req, res) => {
+app.patch('/api/admin/vehiculos/:id/volver-a-publicar', requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Identificador invalido' });
@@ -1289,33 +1289,11 @@ app.patch('/api/admin/vehiculos/:id/cancelar-venta', requireAdmin, async (req, r
       "UPDATE vehiculos SET estado = 'disponible', publicado_en = NOW() WHERE id = ? AND estado IN ('vendido', 'disponible')",
       [id]
     );
-    if (!resultado.affectedRows) return res.status(404).json({ error: 'No se encontro una venta para cancelar' });
-    res.json({ mensaje: 'Venta cancelada. El vehiculo vuelve a aparecer como recien agregado.' });
+    if (!resultado.affectedRows) return res.status(404).json({ error: 'No se encontró el vehículo para volver a publicarlo' });
+    res.json({ mensaje: 'Vehículo publicado nuevamente. Ya aparece como disponible y recién agregado.' });
   } catch (error) {
-    console.error('Error cancelando venta:', error);
-    res.status(500).json({ error: 'No fue posible cancelar la venta' });
-  }
-});
-
-app.delete('/api/admin/vehiculos-vendidos/historial', requireAdmin, requireAdminOnly, async (req, res) => {
-  try {
-    const [resultado] = await db.query(
-      `UPDATE vehiculos vehiculo
-       LEFT JOIN ventas_clientes venta ON venta.vehiculo_id = vehiculo.id
-       SET vehiculo.historial_venta_visible = 0
-       WHERE vehiculo.historial_venta_visible = 1
-         AND (vehiculo.estado = 'vendido' OR vehiculo.vendido_en IS NOT NULL OR venta.id IS NOT NULL)`
-    );
-
-    res.json({
-      mensaje: resultado.affectedRows
-        ? `Historial limpiado correctamente. ${resultado.affectedRows} vehículo(s) dejaron de mostrarse en esta sección.`
-        : 'El historial de vehículos vendidos ya estaba vacío.',
-      ocultados: resultado.affectedRows,
-    });
-  } catch (error) {
-    console.error('Error limpiando historial de vendidos:', error);
-    res.status(500).json({ error: 'No fue posible limpiar el historial de vehículos vendidos' });
+    console.error('Error volviendo a publicar el vehículo:', error);
+    res.status(500).json({ error: 'No fue posible volver a publicar el vehículo' });
   }
 });
 

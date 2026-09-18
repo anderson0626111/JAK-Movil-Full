@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Platform, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { API_URL } from '../../config/api';
 
 export interface AdminUser { id: number; nombre: string; cedula?: string | null; email: string; rol: 'admin' | 'empleado'; activo?: boolean | number; debe_cambiar_contrasena?: boolean | number; foto_url?: string | null; correo_recuperacion?: string | null; }
@@ -41,7 +41,7 @@ function isStrongPassword(value: string) {
   return value.length >= 8 && /[A-Z]/.test(value) && /[a-z]/.test(value) && /\d/.test(value) && /[^A-Za-z0-9]/.test(value);
 }
 
-export function AdminLogin({ language, onAuthenticated }: { language: 'ES' | 'EN'; onAuthenticated: (token: string, user: AdminUser, remember: boolean) => void }) {
+export function AdminLogin({ language, onAuthenticated }: { language: 'ES' | 'EN'; onAuthenticated: (token: string, user: AdminUser) => void }) {
   const [mode, setMode] = useState<'setup' | 'login' | 'register' | 'recover'>('login');
   const [adminExists, setAdminExists] = useState<boolean | null>(null);
   const [nombre, setNombre] = useState('');
@@ -51,7 +51,6 @@ export function AdminLogin({ language, onAuthenticated }: { language: 'ES' | 'EN
   const [confirmarContrasena, setConfirmarContrasena] = useState('');
   const [codigo, setCodigo] = useState('');
   const [recoveryRequested, setRecoveryRequested] = useState(false);
-  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [forgotMessage, setForgotMessage] = useState('');
@@ -111,7 +110,7 @@ export function AdminLogin({ language, onAuthenticated }: { language: 'ES' | 'EN
       const response = await fetch(`${API_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usuario, contrasena }) });
       const data = await response.json();
       if (!response.ok) throw new Error(getError(data, 'No fue posible iniciar sesion'));
-      onAuthenticated(data.token, data.usuario, remember);
+      onAuthenticated(data.token, data.usuario);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'No fue posible iniciar sesion'); }
     finally { setLoading(false); }
   }
@@ -173,7 +172,7 @@ export function AdminLogin({ language, onAuthenticated }: { language: 'ES' | 'EN
       const data = await response.json();
       if (!response.ok) throw new Error(getError(data, 'No fue posible configurar el Administrador General'));
       setAdminExists(true);
-      onAuthenticated(data.token, data.usuario, true);
+      onAuthenticated(data.token, data.usuario);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'No fue posible configurar el Administrador General');
     } finally {
@@ -227,7 +226,6 @@ export function AdminLogin({ language, onAuthenticated }: { language: 'ES' | 'EN
     {(mode === 'setup' || mode === 'register' || (mode === 'recover' && recoveryRequested)) && <TextInput style={styles.input} value={confirmarContrasena} onChangeText={setConfirmarContrasena} placeholder={isEnglish ? 'Confirm password' : 'Confirmar contraseña'} secureTextEntry autoComplete="new-password" onSubmitEditing={submit} />}
     {(mode === 'setup' || mode === 'register' || (mode === 'recover' && recoveryRequested)) && <Text style={styles.passwordHint}>{isEnglish ? 'Minimum 8 characters: uppercase, lowercase, number and symbol.' : 'Mínimo 8 caracteres: mayúscula, minúscula, número y símbolo.'}</Text>}
     {mode === 'login' && <TouchableOpacity style={styles.forgotButton} onPress={() => changeMode('recover')}><Text style={styles.forgotText}>{isEnglish ? 'Forgot password?' : 'Olvidé mi contraseña'}</Text></TouchableOpacity>}
-    {mode === 'login' && <View style={styles.rememberRow}><Switch value={remember} onValueChange={setRemember} trackColor={{ false: '#d1d5db', true: '#fca5a5' }} thumbColor={remember ? '#dc2626' : '#ffffff'} /><Text style={styles.rememberText}>{isEnglish ? 'Keep me signed in' : 'Mantener sesión iniciada'}</Text></View>}
     {!!forgotMessage && <Text style={styles.message}>{forgotMessage}</Text>}
     {!!error && <Text style={styles.error}>{error}</Text>}
     <View style={styles.actions}>{mode !== 'setup' && <TouchableOpacity style={styles.secondaryButton} onPress={cancelOrClear}><Text style={styles.secondaryText}>{mode === 'recover' ? (isEnglish ? 'Back' : 'Volver') : (isEnglish ? 'Clear fields' : 'Limpiar campos')}</Text></TouchableOpacity>}<TouchableOpacity style={styles.primaryButton} onPress={submit} disabled={loading}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === 'setup' ? (isEnglish ? 'Create General Administrator' : 'Crear Administrador General') : mode === 'login' ? (isEnglish ? 'Sign in' : 'Iniciar sesión') : mode === 'register' ? (isEnglish ? 'Register' : 'Registrarse') : recoveryRequested ? (isEnglish ? 'Update password' : 'Cambiar contraseña') : (isEnglish ? 'Send code' : 'Enviar código')}</Text>}</TouchableOpacity></View>
@@ -270,8 +268,6 @@ export function AdminPanel({ token, user, language, onUserUpdated, onLogout, onB
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [removingProfilePhoto, setRemovingProfilePhoto] = useState(false);
   const [confirmRemoveProfilePhoto, setConfirmRemoveProfilePhoto] = useState(false);
-  const [confirmClearSoldHistory, setConfirmClearSoldHistory] = useState(false);
-  const [clearingSoldHistory, setClearingSoldHistory] = useState(false);
   const [message, setMessage] = useState('');
   const mustChangePassword = Boolean(user.debe_cambiar_contrasena);
   const mustCompleteIdentity = !user.cedula;
@@ -441,14 +437,14 @@ export function AdminPanel({ token, user, language, onUserUpdated, onLogout, onB
     finally { setSelling(false); }
   }
 
-  async function cancelSale(id: number) {
+  async function republishVehicle(id: number) {
     try {
-      const response = await fetch(`${API_URL}/api/admin/vehiculos/${id}/cancelar-venta`, { method: 'PATCH', headers });
+      const response = await fetch(`${API_URL}/api/admin/vehiculos/${id}/volver-a-publicar`, { method: 'PATCH', headers });
       const data = await response.json();
-      if (!response.ok) throw new Error(getError(data, 'No fue posible cancelar la venta'));
+      if (!response.ok) throw new Error(getError(data, 'No fue posible volver a publicar el vehículo'));
       setMessage(data.mensaje);
       await loadVehicles();
-    } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'No fue posible cancelar la venta'); }
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'No fue posible volver a publicar el vehículo'); }
   }
 
   async function saveClient() {
@@ -497,28 +493,6 @@ export function AdminPanel({ token, user, language, onUserUpdated, onLogout, onB
       await loadProfiles();
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'No fue posible eliminar el perfil'); }
     finally { setDeletingProfileId(null); }
-  }
-
-  async function clearSoldHistory() {
-    if (user.rol !== 'admin') return;
-    try {
-      setClearingSoldHistory(true);
-      setMessage('');
-      const response = await fetch(`${API_URL}/api/admin/vehiculos-vendidos/historial`, {
-        method: 'DELETE',
-        headers,
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(getError(data, 'No fue posible eliminar el historial'));
-      setConfirmClearSoldHistory(false);
-      setMessage(data.mensaje || (isEnglish ? 'Sold vehicle history cleared.' : 'Historial de vehículos vendidos limpiado.'));
-      await loadVehicles();
-      await loadClientRequests();
-    } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : 'No fue posible eliminar el historial');
-    } finally {
-      setClearingSoldHistory(false);
-    }
   }
 
   async function changeProfileStatus(profile: EmployeeProfile) {
@@ -621,8 +595,8 @@ export function AdminPanel({ token, user, language, onUserUpdated, onLogout, onB
   const field = (label: string, key: keyof VehicleForm, options?: string[]) => <View style={[styles.field, (key === 'accesorios' || key === 'descripcion') && styles.wideField]} key={key}><Text style={styles.label}>{label}{(key === 'marca' || key === 'modelo') ? ' *' : ''}</Text>{options ? <View style={[styles.optionRow, { flexWrap: 'wrap' }]}>{options.map((option) => <TouchableOpacity key={option} onPress={() => change(key, option)} style={[styles.option, form[key] === option && styles.optionSelected]}><Text style={[styles.optionText, form[key] === option && styles.optionTextSelected]}>{option}</Text></TouchableOpacity>)}</View> : <TextInput style={[styles.input, (key === 'accesorios' || key === 'descripcion') && styles.textarea]} value={String(form[key] ?? '')} onChangeText={(value) => change(key, sanitizeFieldValue(key, value))} multiline={key === 'accesorios' || key === 'descripcion'} keyboardType={key === 'anio' || key === 'precio' || key === 'kilometraje' ? 'numeric' : 'default'} />}</View>;
 
   const availableVehicles = vehicles.filter((vehicle) => vehicle.estado !== 'vendido');
-  const soldVehicles = vehicles.filter((vehicle) => vehicle.historial_venta_visible !== 0 && (vehicle.estado === 'vendido' || Boolean(vehicle.vendido_en) || Boolean(vehicle.tiene_venta)));
-  const renderVehicle = (vehicle: VehicleRecord, sold = false) => <View key={vehicle.id} style={styles.vehicleRow}><View style={styles.vehicleInfo}><Text style={styles.vehicleTitle}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.vehicleMeta}>{vehicle.anio || (isEnglish ? 'Year not specified' : 'Año no especificado')} · {vehicle.precio ? `${vehicle.moneda} ${Number(vehicle.precio).toLocaleString()}` : (isEnglish ? 'Price on request' : 'Consultar precio')}</Text>{sold && <Text style={styles.soldText}>{vehicle.estado === 'vendido' ? (isEnglish ? 'Vehicle sold' : 'Vehículo vendido') : (isEnglish ? 'Vehicle sold and republished' : 'Vehículo vendido y publicado de nuevo')}</Text>}</View><TouchableOpacity onPress={() => edit(vehicle)} style={styles.editButton}><Text style={styles.editText}>{isEnglish ? 'Edit vehicle' : 'Editar vehículo'}</Text></TouchableOpacity>{sold && vehicle.estado === 'vendido' ? <TouchableOpacity onPress={() => cancelSale(vehicle.id)} style={styles.secondaryButton}><Text style={styles.secondaryText}>{isEnglish ? 'Republish' : 'Volver a publicar'}</Text></TouchableOpacity> : !sold ? <TouchableOpacity onPress={() => setSaleCandidate(vehicle)} style={styles.deleteButton}><Text style={styles.deleteText}>{isEnglish ? 'Sell' : 'Vender'}</Text></TouchableOpacity> : null}</View>;
+  const soldVehicles = vehicles.filter((vehicle) => vehicle.estado === 'vendido' || Boolean(vehicle.vendido_en) || Boolean(vehicle.tiene_venta));
+  const renderVehicle = (vehicle: VehicleRecord, sold = false) => <View key={vehicle.id} style={styles.vehicleRow}><View style={styles.vehicleInfo}><Text style={styles.vehicleTitle}>{vehicle.marca} {vehicle.modelo}</Text><Text style={styles.vehicleMeta}>{vehicle.anio || (isEnglish ? 'Year not specified' : 'Año no especificado')} · {vehicle.precio ? `${vehicle.moneda} ${Number(vehicle.precio).toLocaleString()}` : (isEnglish ? 'Price on request' : 'Consultar precio')}</Text>{sold && <Text style={styles.soldText}>{vehicle.estado === 'vendido' ? (isEnglish ? 'Vehicle sold' : 'Vehículo vendido') : (isEnglish ? 'Vehicle sold and republished' : 'Vehículo vendido y publicado de nuevo')}</Text>}</View><TouchableOpacity onPress={() => edit(vehicle)} style={styles.editButton}><Text style={styles.editText}>{isEnglish ? 'Edit vehicle' : 'Editar vehículo'}</Text></TouchableOpacity>{sold && vehicle.estado === 'vendido' ? <TouchableOpacity onPress={() => republishVehicle(vehicle.id)} style={styles.secondaryButton}><Text style={styles.secondaryText}>{isEnglish ? 'Republish' : 'Volver a publicar'}</Text></TouchableOpacity> : !sold ? <TouchableOpacity onPress={() => setSaleCandidate(vehicle)} style={styles.deleteButton}><Text style={styles.deleteText}>{isEnglish ? 'Sell' : 'Vender'}</Text></TouchableOpacity> : null}</View>;
   const renderAvatar = (profile: { nombre: string; foto_url?: string | null }) => profile.foto_url ? <Image source={{ uri: profile.foto_url }} style={styles.profileAvatar} /> : <View style={styles.profileAvatarFallback}><Text style={styles.profileAvatarText}>{profile.nombre.trim().charAt(0).toUpperCase() || '?'}</Text></View>;
 
   return <View style={styles.panel}>
@@ -634,7 +608,7 @@ export function AdminPanel({ token, user, language, onUserUpdated, onLogout, onB
       <View style={styles.actions}><TouchableOpacity style={styles.secondaryButton} onPress={resetForm}><Text style={styles.secondaryText}>{isEnglish ? 'Clear' : 'Limpiar'}</Text></TouchableOpacity><TouchableOpacity style={styles.primaryButton} onPress={save} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{editingId ? (isEnglish ? 'Save changes' : 'Guardar cambios') : (isEnglish ? 'Save vehicle' : 'Guardar vehículo')}</Text>}</TouchableOpacity></View>
     </View>}
     {section === 'available' && <View style={styles.listSection}><Text style={styles.formTitle}>{isEnglish ? 'Available vehicles' : 'Vehiculos disponibles'}</Text>{loading ? <ActivityIndicator color="#dc2626" /> : availableVehicles.map((vehicle) => renderVehicle(vehicle))}</View>}
-    {section === 'sold' && <View style={styles.listSection}><View style={styles.listHeader}><Text style={[styles.formTitle, styles.listHeaderTitle]}>{isEnglish ? 'Sold vehicles' : 'Vehículos vendidos'}</Text>{user.rol === 'admin' && soldVehicles.length > 0 && <TouchableOpacity style={styles.dangerButton} onPress={() => setConfirmClearSoldHistory(true)}><Text style={styles.dangerButtonText}>{isEnglish ? 'Delete history' : 'Eliminar historial'}</Text></TouchableOpacity>}</View>{loading ? <ActivityIndicator color="#dc2626" /> : (soldVehicles.length ? soldVehicles.map((vehicle) => renderVehicle(vehicle, true)) : <Text style={styles.hint}>{isEnglish ? 'There are no sold vehicles yet.' : 'Aún no hay vehículos vendidos.'}</Text>)}</View>}
+    {section === 'sold' && <View style={styles.listSection}><Text style={styles.formTitle}>{isEnglish ? 'Sold vehicles' : 'Vehículos vendidos'}</Text>{loading ? <ActivityIndicator color="#dc2626" /> : (soldVehicles.length ? soldVehicles.map((vehicle) => renderVehicle(vehicle, true)) : <Text style={styles.hint}>{isEnglish ? 'There are no sold vehicles yet.' : 'Aún no hay vehículos vendidos.'}</Text>)}</View>}
     {section === 'clients' && <View style={styles.listSection}><Text style={styles.formTitle}>{isEnglish ? 'Customers and sales' : 'Clientes y ventas'}</Text>{clientSales.length ? clientSales.map((sale) => <View key={`sale-${sale.id}`} style={styles.requestRow}><View style={clientStyles.row}><View style={clientStyles.info}><Text style={styles.vehicleTitle}>{sale.nombre} {sale.apellido}</Text><Text style={styles.vehicleMeta}>{sale.vehiculo}</Text><Text style={styles.requestText}>{isEnglish ? 'ID' : 'Cédula'}: {sale.cedula}</Text><Text style={styles.requestText}>{sale.direccion}</Text></View><View style={clientStyles.actions}><TouchableOpacity accessibilityLabel={isEnglish ? 'Edit customer' : 'Editar cliente'} onPress={() => setEditingClient(sale)} style={clientStyles.iconButton}><Text style={clientStyles.editIcon}>✎</Text></TouchableOpacity>{user.rol === 'admin' && <TouchableOpacity accessibilityLabel={isEnglish ? 'Delete customer' : 'Eliminar cliente'} onPress={() => deleteClient(sale)} style={clientStyles.iconButton}><Text style={clientStyles.deleteIcon}>🗑</Text></TouchableOpacity>}<TouchableOpacity accessibilityLabel={isEnglish ? 'Download customer information PDF' : 'Descargar PDF informativo del cliente'} onPress={() => downloadInvoice(sale)} style={[clientStyles.iconButton, clientStyles.invoiceButton]}><Text style={clientStyles.pdfIcon}>PDF</Text></TouchableOpacity></View></View></View>) : <Text style={styles.hint}>{isEnglish ? 'There are no registered sales yet.' : 'Aún no hay ventas registradas.'}</Text>}</View>}
     <Modal visible={saleCandidate !== null} transparent animationType="fade" onRequestClose={() => !selling && setSaleCandidate(null)}><View style={styles.modalOverlay}><View style={styles.modalPanel}><Text style={styles.formTitle}>{isEnglish ? 'Confirm sale' : 'Confirmar venta'}</Text><Text style={styles.modalText}>{isEnglish ? `Buyer details for ${saleCandidate?.marca} ${saleCandidate?.modelo}` : `Datos del comprador de ${saleCandidate?.marca} ${saleCandidate?.modelo}`}</Text><TextInput style={styles.input} value={buyer.nombre} onChangeText={(nombre) => setBuyer((current) => ({ ...current, nombre }))} placeholder={isEnglish ? 'First name' : 'Nombre'} /><TextInput style={styles.input} value={buyer.apellido} onChangeText={(apellido) => setBuyer((current) => ({ ...current, apellido }))} placeholder={isEnglish ? 'Last name' : 'Apellido'} /><TextInput style={styles.input} value={buyer.cedula} onChangeText={(cedula) => setBuyer((current) => ({ ...current, cedula: normalizeCedula(cedula) }))} placeholder={isEnglish ? 'ID number' : 'Número de cédula'} keyboardType="numeric" maxLength={11} /><TextInput style={[styles.input, styles.saleAddress]} value={buyer.direccion} onChangeText={(direccion) => setBuyer((current) => ({ ...current, direccion }))} placeholder={isEnglish ? 'Address' : 'Direccion'} /><View style={styles.actions}><TouchableOpacity style={styles.secondaryButton} onPress={() => setSaleCandidate(null)} disabled={selling}><Text style={styles.secondaryText}>{isEnglish ? 'No, cancel' : 'No, cancelar'}</Text></TouchableOpacity><TouchableOpacity style={styles.primaryButton} onPress={confirmSale} disabled={selling}>{selling ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{isEnglish ? 'Yes, sell' : 'Sí, vender'}</Text>}</TouchableOpacity></View></View></View></Modal>
     <Modal visible={editingClient !== null} transparent animationType="fade" onRequestClose={() => !savingClient && setEditingClient(null)}><View style={styles.modalOverlay}><View style={styles.modalPanel}><Text style={styles.formTitle}>{isEnglish ? 'Edit customer' : 'Editar cliente'}</Text><TextInput style={styles.input} value={editingClient?.nombre || ''} onChangeText={(nombre) => setEditingClient((current) => current ? { ...current, nombre } : current)} placeholder={isEnglish ? 'First name' : 'Nombre'} /><TextInput style={styles.input} value={editingClient?.apellido || ''} onChangeText={(apellido) => setEditingClient((current) => current ? { ...current, apellido } : current)} placeholder={isEnglish ? 'Last name' : 'Apellido'} /><TextInput style={styles.input} value={editingClient?.cedula || ''} onChangeText={(cedula) => setEditingClient((current) => current ? { ...current, cedula: normalizeCedula(cedula) } : current)} placeholder={isEnglish ? 'ID number' : 'Número de cédula'} keyboardType="numeric" maxLength={11} /><TextInput style={[styles.input, styles.saleAddress]} value={editingClient?.direccion || ''} onChangeText={(direccion) => setEditingClient((current) => current ? { ...current, direccion } : current)} placeholder={isEnglish ? 'Address' : 'Direccion'} /><View style={styles.actions}><TouchableOpacity style={styles.secondaryButton} onPress={() => setEditingClient(null)} disabled={savingClient}><Text style={styles.secondaryText}>{isEnglish ? 'Cancel' : 'Cancelar'}</Text></TouchableOpacity><TouchableOpacity style={styles.primaryButton} onPress={saveClient} disabled={savingClient}>{savingClient ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{isEnglish ? 'Save changes' : 'Guardar cambios'}</Text>}</TouchableOpacity></View></View></View></Modal>
@@ -642,7 +616,6 @@ export function AdminPanel({ token, user, language, onUserUpdated, onLogout, onB
     <Modal visible={profileToDelete !== null} transparent animationType="fade" onRequestClose={() => !deletingProfileId && setProfileToDelete(null)}><View style={styles.modalOverlay}><View style={styles.modalPanel}><Text style={styles.formTitle}>{isEnglish ? 'Delete profile' : 'Eliminar perfil'}</Text><Text style={styles.modalText}>{isEnglish ? `Do you want to delete ${profileToDelete?.nombre}?` : `¿Deseas eliminar a ${profileToDelete?.nombre}?`}</Text><Text style={styles.modalHint}>{isEnglish ? 'This will revoke access to the system.' : 'Esto revocará su acceso al sistema.'}</Text><View style={styles.actions}><TouchableOpacity style={styles.secondaryButton} onPress={() => setProfileToDelete(null)} disabled={Boolean(deletingProfileId)}><Text style={styles.secondaryText}>{isEnglish ? 'No, cancel' : 'No, cancelar'}</Text></TouchableOpacity><TouchableOpacity style={styles.primaryButton} onPress={() => profileToDelete && deleteProfile(profileToDelete)} disabled={Boolean(deletingProfileId)}>{deletingProfileId ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{isEnglish ? 'Yes, delete' : 'Sí, eliminar'}</Text>}</TouchableOpacity></View></View></View></Modal>
     <Modal visible={resetProfile !== null} transparent animationType="fade" onRequestClose={() => { if (!resettingPassword) { setResetProfile(null); setResetPasswordError(''); } }}><View style={styles.modalOverlay}><View style={styles.modalPanel}><Text style={styles.formTitle}>{isEnglish ? 'Reset password' : 'Restablecer contraseña'}</Text><Text style={styles.modalText}>{resetProfile?.nombre}</Text><TextInput style={[styles.input, styles.saleAddress]} value={resetPassword} onChangeText={(value) => { setResetPassword(value); setResetPasswordError(''); }} placeholder={isEnglish ? 'Temporary password' : 'Contraseña temporal'} secureTextEntry autoComplete="new-password" onSubmitEditing={resetProfilePassword} />{!!resetPasswordError && <Text style={styles.modalError}>{resetPasswordError}</Text>}<View style={styles.actions}><TouchableOpacity style={styles.secondaryButton} onPress={() => { setResetProfile(null); setResetPasswordError(''); }} disabled={resettingPassword}><Text style={styles.secondaryText}>{isEnglish ? 'Cancel' : 'Cancelar'}</Text></TouchableOpacity><TouchableOpacity style={styles.primaryButton} onPress={resetProfilePassword} disabled={resettingPassword}>{resettingPassword ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{isEnglish ? 'Save' : 'Guardar'}</Text>}</TouchableOpacity></View></View></View></Modal>
     <Modal visible={confirmRemoveProfilePhoto} transparent animationType="fade" onRequestClose={() => !removingProfilePhoto && setConfirmRemoveProfilePhoto(false)}><View style={styles.modalOverlay}><View style={styles.modalPanel}><Text style={styles.formTitle}>{isEnglish ? 'Remove photo' : 'Eliminar foto'}</Text><Text style={styles.modalText}>{isEnglish ? 'Do you want to remove your profile photo?' : '¿Deseas eliminar tu foto de perfil?'}</Text><Text style={styles.modalHint}>{isEnglish ? 'Your profile will show the initial of your name instead.' : 'Tu perfil mostrará la inicial de tu nombre en su lugar.'}</Text><View style={styles.actions}><TouchableOpacity style={styles.secondaryButton} onPress={() => setConfirmRemoveProfilePhoto(false)} disabled={removingProfilePhoto}><Text style={styles.secondaryText}>{isEnglish ? 'No, cancel' : 'No, cancelar'}</Text></TouchableOpacity><TouchableOpacity style={styles.primaryButton} onPress={removeProfilePhoto} disabled={removingProfilePhoto}>{removingProfilePhoto ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{isEnglish ? 'Yes, remove' : 'Sí, eliminar'}</Text>}</TouchableOpacity></View></View></View></Modal>
-    <Modal visible={confirmClearSoldHistory} transparent animationType="fade" onRequestClose={() => !clearingSoldHistory && setConfirmClearSoldHistory(false)}><View style={styles.modalOverlay}><View style={styles.modalPanel}><Text style={styles.formTitle}>{isEnglish ? 'Clear sold vehicle history' : 'Limpiar historial de vehículos vendidos'}</Text><Text style={styles.modalText}>{isEnglish ? 'This will only clear the vehicles shown in this history.' : 'Esta acción solamente limpiará los vehículos mostrados en este historial.'}</Text><Text style={styles.modalHint}>{isEnglish ? 'Vehicles, photos, customer records and database information will remain stored. Currently available vehicles will not be affected.' : 'Los vehículos, fotografías, clientes y demás información permanecerán guardados en la base de datos. Los vehículos disponibles tampoco serán afectados.'}</Text><View style={styles.actions}><TouchableOpacity style={styles.secondaryButton} onPress={() => setConfirmClearSoldHistory(false)} disabled={clearingSoldHistory}><Text style={styles.secondaryText}>{isEnglish ? 'No, cancel' : 'No, cancelar'}</Text></TouchableOpacity><TouchableOpacity style={styles.dangerButton} onPress={clearSoldHistory} disabled={clearingSoldHistory}>{clearingSoldHistory ? <ActivityIndicator color="#fff" /> : <Text style={styles.dangerButtonText}>{isEnglish ? 'Yes, clear history' : 'Sí, limpiar historial'}</Text>}</TouchableOpacity></View></View></View></Modal>
     <Modal visible={Boolean(saleError)} transparent animationType="fade" onRequestClose={() => setSaleError('')}><View style={styles.modalOverlay}><View style={styles.modalPanel}><Text style={styles.formTitle}>{isEnglish ? 'Missing information' : 'Faltan datos'}</Text><Text style={styles.modalText}>{saleError}</Text><View style={styles.actions}><TouchableOpacity style={styles.primaryButton} onPress={() => setSaleError('')}><Text style={styles.primaryText}>{isEnglish ? 'Continue' : 'Entendido'}</Text></TouchableOpacity></View></View></View></Modal>
     {section === 'account' && <View style={styles.form}>
       <Text style={styles.formTitle}>{isEnglish ? 'Update profile' : 'Actualizar perfil'}</Text>
