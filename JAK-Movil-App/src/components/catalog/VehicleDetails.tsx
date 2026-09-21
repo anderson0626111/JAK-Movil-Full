@@ -19,7 +19,7 @@ interface ApiVehicle {
   tipo: string | null; condicion: string | null; transmision: string | null; combustible: string | null;
   imagen: string | null; fotos: string[]; color_exterior: string | null;
   color_interior: string | null; kilometraje: string | null; cilindraje: string | null;
-  traccion: string | null; accesorios: string | null; equipamiento: string | null;
+  traccion: string | null; accesorios: string | null;
 }
 
 interface VehicleDetailsProps { vehicleId: string; onBack: () => void; language?: 'ES' | 'EN'; }
@@ -184,7 +184,6 @@ export function VehicleDetails({ vehicleId, onBack, language = 'ES' }: VehicleDe
       </ScrollReveal>
 
       {!!vehicle.accesorios && <ScrollReveal><FeatureList title={isEnglish ? 'Features and accessories' : 'Accesorios y características'} value={vehicle.accesorios} /></ScrollReveal>}
-      {!!vehicle.equipamiento && <ScrollReveal><FeatureList title={isEnglish ? 'Highlighted equipment' : 'Equipamiento destacado'} value={vehicle.equipamiento} /></ScrollReveal>}
       <Modal
         visible={lightboxOpen}
         transparent

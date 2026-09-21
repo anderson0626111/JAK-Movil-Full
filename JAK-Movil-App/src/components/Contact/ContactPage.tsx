@@ -5,6 +5,7 @@ import { ScrollReveal } from '../animation/ScrollReveal';
 export function ContactPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
   const isEnglish = language === 'EN';
   const dealerEmail = 'rosybelautosales@gmail.com';
+  const dealerWhatsApp = '18094748410';
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,7 +22,7 @@ export function ContactPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
     const text = isEnglish
       ? `Hello, my name is ${formData.name}.\nEmail: ${formData.email}\nPhone: ${formData.phone}\n\nMessage: ${formData.message}`
       : `Hola, mi nombre es ${formData.name}.\nCorreo: ${formData.email}\nTeléfono: ${formData.phone}\n\nMensaje: ${formData.message}`;
-    const url = `https://wa.me/18496522611?text=${encodeURIComponent(text)}`; // Cambiar por el número de Rosibel Auto Sales Services
+    const url = `https://wa.me/${dealerWhatsApp}?text=${encodeURIComponent(text)}`;
     
     Linking.openURL(url).catch(() => {
       alert(isEnglish ? 'WhatsApp could not be opened' : 'No se pudo abrir WhatsApp');

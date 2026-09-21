@@ -259,6 +259,7 @@ export default function App() {
     try {
       const path = window.location.pathname.replace(/\/$/, '');
       const adminRequested = path === '/admin' || new URLSearchParams(window.location.search).get('admin') === '1';
+      const adminContextActive = adminRequested || window.sessionStorage.getItem(ADMIN_CONTEXT_KEY) === '1';
 
       const sesionTemporal = window.sessionStorage.getItem(ADMIN_SESSION_KEY);
       const almacenamiento = sesionTemporal ? window.sessionStorage : window.localStorage;
@@ -270,7 +271,7 @@ export default function App() {
       if (sesion.user && ['admin', 'empleado'].includes(sesion.user.rol)) {
         setAdminToken(sesion.token);
         setAdminUser(sesion.user);
-        setShowAdminNavigation(true);
+        setShowAdminNavigation(adminContextActive);
         if (adminRequested) setCurrentPage('admin');
       }
 
@@ -280,7 +281,7 @@ export default function App() {
           const data = await response.json();
           setAdminToken(sesion.token as string);
           setAdminUser(data.usuario);
-          setShowAdminNavigation(true);
+          setShowAdminNavigation(adminContextActive);
           almacenamiento.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token: sesion.token, user: data.usuario }));
           if (adminRequested) setCurrentPage('admin');
         })

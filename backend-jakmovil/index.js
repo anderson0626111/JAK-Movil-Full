@@ -302,7 +302,7 @@ async function prepararRelaciones() {
 
 async function prepararInventario() {
   const columnas = await db.query(
-    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehiculos' AND COLUMN_NAME IN ('estado', 'vendido_en', 'publicado_en', 'historial_venta_visible')"
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehiculos' AND COLUMN_NAME IN ('estado', 'vendido_en', 'publicado_en', 'historial_venta_visible', 'equipamiento')"
   );
   const existentes = new Set(columnas[0].map((columna) => columna.COLUMN_NAME));
 
@@ -318,6 +318,34 @@ async function prepararInventario() {
   }
   if (!existentes.has('historial_venta_visible')) {
     await db.query('ALTER TABLE vehiculos ADD COLUMN historial_venta_visible TINYINT(1) NOT NULL DEFAULT 1');
+  }
+  if (existentes.has('equipamiento')) {
+    const [vehiculosConEquipamiento] = await db.query(
+      "SELECT id, accesorios, equipamiento FROM vehiculos WHERE equipamiento IS NOT NULL AND TRIM(equipamiento) <> ''"
+    );
+
+    for (const vehiculo of vehiculosConEquipamiento) {
+      const caracteristicas = [];
+      const existentesNormalizadas = new Set();
+
+      for (const lista of [vehiculo.accesorios, vehiculo.equipamiento]) {
+        for (const elemento of String(lista || '').split(/\r?\n/)) {
+          const texto = elemento.trim();
+          const clave = texto.toLocaleLowerCase('es');
+          if (texto && !existentesNormalizadas.has(clave)) {
+            existentesNormalizadas.add(clave);
+            caracteristicas.push(texto);
+          }
+        }
+      }
+
+      await db.query('UPDATE vehiculos SET accesorios = ? WHERE id = ?', [
+        caracteristicas.length ? caracteristicas.join('\n') : null,
+        vehiculo.id,
+      ]);
+    }
+
+    await db.query('ALTER TABLE vehiculos DROP COLUMN equipamiento');
   }
   await db.query(`ALTER TABLE vehiculos
     MODIFY ${yearColumn} INT NULL,
