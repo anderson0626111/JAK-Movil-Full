@@ -23,7 +23,7 @@ export function AboutPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
             <Text style={styles.sectionTitle}>{isEnglish ? 'Our dealership history' : 'La historia de nuestro dealer'}</Text>
             
             <Text style={styles.paragraph}>
-              {isEnglish ? 'Rosybel Auto Sales was created from years of technical automotive experience, hard work and a clear purpose: to help each customer choose a vehicle with confidence.' : 'Rosybel Auto Sales nació de años de experiencia técnica en el sector automotriz, trabajo constante y un propósito claro: ayudar a cada cliente a elegir su vehículo con confianza.'}
+              {isEnglish ? 'Rosybel Auto Sales was founded in 2021 by Bernardo Vasquez Reyes, building on years of technical automotive experience, hard work and a clear purpose: to help each customer choose a vehicle with confidence.' : 'Rosybel Auto Sales fue fundada en 2021 por Bernardo Vasquez Reyes, a partir de años de experiencia técnica en el sector automotriz, trabajo constante y un propósito claro: ayudar a cada cliente a elegir su vehículo con confianza.'}
             </Text>
 
             <Text style={styles.paragraph}>
@@ -35,7 +35,7 @@ export function AboutPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
             </Text>
 
             <Text style={styles.paragraph}>
-              {isEnglish ? 'Today, with more than ' : 'Actualmente, con más de '}<Text style={styles.boldText}>{isEnglish ? '4 years of experience' : '4 años de trayectoria'}</Text>{isEnglish ? ', Rosybel Auto Sales serves the Verón–Punta Cana area with personalized guidance, transparent information and vehicles selected according to mechanical and cosmetic quality standards.' : ', Rosybel Auto Sales atiende la zona de Verón–Punta Cana con asesoría personalizada, información transparente y vehículos seleccionados bajo criterios de calidad mecánica y estética.'}
+              {isEnglish ? 'Today, with a history built since 2021, Rosybel Auto Sales serves the Verón–Punta Cana area with personalized guidance, transparent information and vehicles selected according to mechanical and cosmetic quality standards.' : 'Actualmente, con una trayectoria construida desde 2021, Rosybel Auto Sales atiende la zona de Verón–Punta Cana con asesoría personalizada, información transparente y vehículos seleccionados bajo criterios de calidad mecánica y estética.'}
             </Text>
             </View>
           </View>
@@ -74,8 +74,8 @@ export function AboutPage({ language = 'ES' }: { language?: 'ES' | 'EN' }) {
         <ScrollReveal delay={90}>
           <View style={styles.statsBanner}>
             <View style={styles.statItem}>
-            <Text style={styles.statNumber}>4+</Text>
-            <Text style={styles.statLabel}>{isEnglish ? 'Years of Experience' : 'Años de Trayectoria'}</Text>
+            <Text style={styles.statNumber}>2021</Text>
+            <Text style={styles.statLabel}>{isEnglish ? 'Year Founded' : 'Año de Fundación'}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
@@ -161,10 +161,6 @@ const styles = StyleSheet.create({
     color: '#4b5563',
     lineHeight: 24,
     marginBottom: 16,
-  },
-  boldText: {
-    fontWeight: 'bold',
-    color: '#111827',
   },
   cardsGrid: {
     flexDirection: 'row',

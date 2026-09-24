@@ -22,6 +22,8 @@ export function Footer({
 }: FooterProps) {
   const isEnglish = language === 'EN';
   const dealerEmail = 'rosybelautosales@gmail.com';
+  const dealerAddress = 'C/ Almirante #14, Verón, Punta Cana, República Dominicana';
+  const dealerMapUrl = 'https://maps.app.goo.gl/buuCqXnhAB3SaRgC8?g_st=ic';
   const handleOpenLink = (url: string) => {
     Linking.openURL(url).catch((err) => console.error("Error al abrir enlace: ", err));
   };
@@ -58,7 +60,13 @@ export function Footer({
         {/* Sección 3: Contacto & Info */}
         <View style={styles.contactSection}>
           <Text style={styles.sectionTitle}>{isEnglish ? 'Contact' : 'Contacto'}</Text>
-          <Text style={styles.contactText}> C/ Almirante #14 Veron, Punta Cana, Republica Dominicana</Text>
+          <TouchableOpacity
+            accessibilityRole="link"
+            accessibilityLabel={isEnglish ? 'Open address in Google Maps' : 'Abrir dirección en Google Maps'}
+            onPress={() => handleOpenLink(dealerMapUrl)}
+          >
+            <Text style={[styles.contactText, styles.addressLink]}>{dealerAddress}</Text>
+          </TouchableOpacity>
           <Text style={styles.contactText}> +1 (809) 474-8410</Text>
           <TouchableOpacity accessibilityRole="link" onPress={() => handleOpenLink(`mailto:${dealerEmail}`)}>
             <Text style={[styles.contactText, styles.emailLink]}> {dealerEmail}</Text>
@@ -141,6 +149,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   emailLink: {
+    textDecorationLine: 'underline',
+  },
+  addressLink: {
     textDecorationLine: 'underline',
   },
   divider: {
